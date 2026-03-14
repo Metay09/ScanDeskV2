@@ -4,7 +4,7 @@ import Modal from "./Modal";
 import FieldInput from "./FieldInput";
 import CustomerPicker from "./CustomerPicker";
 
-export default function DetailFormModal({ barcode, fields, extras, onExtrasChange, customer, onCustomerChange, aciklama, onAciklamaChange, customerList, onCustomerAdd, onCustomerRemove, canManageCustomers, onSave, onClose }) {
+export default function DetailFormModal({ barcode, fields, extras, onExtrasChange, customer, onCustomerChange, aciklama, onAciklamaChange, customerList, onCustomerAdd, onCustomerRemove, canManageCustomers, onSave, onClose, onError }) {
   const firstFieldRef = useRef(null);
 
   // Auto-focus first field when modal opens
@@ -19,7 +19,8 @@ export default function DetailFormModal({ barcode, fields, extras, onExtrasChang
   const validateAndSave = () => {
     const missing = fields.filter(f => f.required && !extras[f.id] && extras[f.id] !== 0);
     if (missing.length > 0) {
-      alert(`Zorunlu alanları doldurun: ${missing.map(f => f.label).join(", ")}`);
+      const msg = `Zorunlu alanları doldurun: ${missing.map(f => f.label).join(", ")}`;
+      if (onError) onError(msg, "var(--err)");
       return;
     }
     onSave();

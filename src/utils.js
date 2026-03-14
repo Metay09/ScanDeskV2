@@ -37,13 +37,22 @@ export const getShiftEndTime = (shiftLabel) => {
   const shift = FIXED_SHIFTS.find(s => s.label === shiftLabel);
   if (!shift) return null;
 
-  const endHour = shift.end % 24; // Handle 24 -> 0
+  const endHour = shift.end % 24; // Handle 24 -> 0 (midnight)
   const endTime = new Date(now);
   endTime.setHours(endHour, 0, 0, 0);
 
-  // If end hour is before current hour, shift ends tomorrow (for overnight shifts like 4-12)
   const currentHour = now.getHours();
-  if (endHour <= currentHour && shift.start > endHour) {
+
+  if (endHour === 0 && shift.start > 0) {
+    // Gece yarısında biten vardiya (örn. "4-12", 16:00-00:00)
+    // Eğer şu an vardiya başlangıç saatinden sonrasındaysak (henüz gece yarısı olmadı),
+    // bitiş zamanı bu gecenin yarısı → +1 gün ekle.
+    // Eğer gece yarısını geçtikse (currentHour < shift.start), bitiş bu sabahın yarısı → ekleme.
+    if (currentHour >= shift.start) {
+      endTime.setDate(endTime.getDate() + 1);
+    }
+  } else if (endHour <= currentHour && shift.start > endHour) {
+    // Diğer gece geçişli vardiyalar için
     endTime.setDate(endTime.getDate() + 1);
   }
 
@@ -68,8 +77,8 @@ export const deriveShiftDate = (record) => {
 };
 
 export async function hashPassword(plain, saltHex) {
-  const salt = saltHex
-    ? new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)))
+  const salt = (saltHex && saltHex.length >= 2)
+    ? new Uint8Array((saltHex.match(/.{2}/g) || []).map(b => parseInt(b, 16)))
     : crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(plain), "PBKDF2", false, ["deriveBits"]
