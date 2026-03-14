@@ -395,8 +395,8 @@ export default function App() {
   }, []);
 
   // addToSyncQueue önce tanımlanmalı — handleDelete ve handleEdit bağımlılık olarak kullanıyor
-  const addToSyncQueue = useCallback((action, recordId, payload) => {
-    const item = createQueueItem(action, recordId, payload);
+  const addToSyncQueue = useCallback((action, recordId, payload, integrationType = "postgres_api") => {
+    const item = createQueueItem(action, recordId, payload, integrationType);
     setSyncQueue(prev => addToQueue(prev, item));
   }, []);
   const handleDelete = useCallback((idOrIds) => {
@@ -416,8 +416,10 @@ export default function App() {
     }
 
     if (integration.active && integration.type === "gsheets") {
-      sheetsDeleteBulk(integration.gsheets, ids)
-        .catch(e => console.error("Sheets silme hatası:", e));
+      ids.forEach(id => {
+        sheetsDelete(integration.gsheets, id)
+          .catch(() => addToSyncQueue("delete", id, { id }, "gsheets"));
+      });
     }
   }, [records, integration, toast, addToSyncQueue]);
   const handleEdit = useCallback((r) => {
@@ -440,26 +442,28 @@ export default function App() {
 
     if (integration.active && integration.type === "gsheets") {
       syncRecordToSheets(integration.gsheets, rec, fields)
-        .catch(e => toast("Sheets güncelleme hatası: " + e.message, "var(--err)"));
+        .catch(() => addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets"));
     }
   }, [fields, addShiftDate, integration, toast, handleSyncUpdate, addToSyncQueue]);
 
-  // Process sync queue - sync pending items to PostgreSQL
-  const processSyncQueue = useCallback(async () => {
-    if (!integration.active || integration.type !== "postgres_api") {
-      toast("PostgreSQL entegrasyonu aktif değil", "var(--err)");
+  // Process sync queue - sync pending items to active integration (PostgreSQL or Google Sheets)
+  const processSyncQueue = useCallback(async (silent = false) => {
+    if (!integration.active) {
+      if (!silent) toast("Entegrasyon aktif değil", "var(--err)");
       return { success: 0, failed: 0 };
     }
 
     if (isSyncing) {
-      toast("Senkronizasyon zaten devam ediyor", "var(--acc)");
+      if (!silent) toast("Senkronizasyon zaten devam ediyor", "var(--acc)");
       return { success: 0, failed: 0 };
     }
 
-    // Get retryable items (pending + failed)
-    const retryable = getRetryableItems(syncQueue);
+    // Get retryable items matching current integration type (backward compat: items without integrationType → postgres_api)
+    const retryable = getRetryableItems(syncQueue).filter(item =>
+      (item.integrationType || "postgres_api") === integration.type
+    );
     if (retryable.length === 0) {
-      toast("Bekleyen işlem yok", "var(--acc)");
+      if (!silent) toast("Bekleyen işlem yok", "var(--acc)");
       return { success: 0, failed: 0 };
     }
 
@@ -470,36 +474,35 @@ export default function App() {
 
     for (const item of retryable) {
       try {
-        // Track if this was a retry
         const wasRetry = item.status === "failed";
-
-        // Mark as processing
         setSyncQueue(prev => markAsProcessing(prev, item.id));
 
-        // Execute the sync operation
-        if (item.action === "create") {
-          const dbPayload = toDbPayload(item.payload);
-          await postgresApiInsert(integration.postgresApi, dbPayload);
-          // Update record sync status to synced
-          handleSyncUpdate(item.recordId, true, null);
-        } else if (item.action === "update") {
-          const dbPayload = toDbPayload(item.payload);
-          await postgresApiUpdate(integration.postgresApi, item.recordId, dbPayload);
-          // Update record sync status to synced
-          handleSyncUpdate(item.recordId, true, null);
-        } else if (item.action === "delete") {
-          await postgresApiDelete(integration.postgresApi, item.recordId);
-          // Record already deleted locally, no need to update
+        if (integration.type === "postgres_api") {
+          if (item.action === "create") {
+            const dbPayload = toDbPayload(item.payload);
+            await postgresApiInsert(integration.postgresApi, dbPayload);
+            handleSyncUpdate(item.recordId, true, null);
+          } else if (item.action === "update") {
+            const dbPayload = toDbPayload(item.payload);
+            await postgresApiUpdate(integration.postgresApi, item.recordId, dbPayload);
+            handleSyncUpdate(item.recordId, true, null);
+          } else if (item.action === "delete") {
+            await postgresApiDelete(integration.postgresApi, item.recordId);
+          }
+        } else if (integration.type === "gsheets") {
+          if (item.action === "create" || item.action === "update") {
+            await syncRecordToSheets(integration.gsheets, item.payload.record, item.payload.fields);
+            handleSyncUpdate(item.recordId, true, null);
+          } else if (item.action === "delete") {
+            await sheetsDelete(integration.gsheets, item.recordId);
+          }
         }
 
-        // Success - remove from queue
         setSyncQueue(prev => removeFromQueue(prev, item.id));
         successCount++;
         if (wasRetry) retriedCount++;
       } catch (err) {
-        // Failed - mark as failed in queue
         setSyncQueue(prev => markAsFailed(prev, item.id, err.message));
-        // Update record sync status to failed
         if (item.action !== "delete") {
           handleSyncUpdate(item.recordId, false, err.message);
         }
@@ -509,7 +512,6 @@ export default function App() {
 
     setIsSyncing(false);
 
-    // Show detailed result
     if (failedCount === 0 && retriedCount === 0) {
       toast(`${successCount} işlem senkronize edildi`, "var(--ok)");
     } else if (failedCount === 0 && retriedCount > 0) {
@@ -522,6 +524,13 @@ export default function App() {
 
     return { success: successCount, failed: failedCount, retried: retriedCount };
   }, [integration, isSyncing, syncQueue, handleSyncUpdate, toast]);
+
+  // İnternet bağlantısı geldiğinde bekleyen işlemleri otomatik senkronize et
+  useEffect(() => {
+    const handleOnline = () => processSyncQueue(true);
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [processSyncQueue]);
 
   const handleClear  = () => {
     if (window.confirm("Tüm kayıtlar silinecek. Onaylıyor musunuz?")) {
