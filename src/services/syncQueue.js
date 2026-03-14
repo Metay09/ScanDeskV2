@@ -25,12 +25,13 @@ import { genId } from '../constants';
 /**
  * Create a new queue item
  */
-export function createQueueItem(action, recordId, payload) {
+export function createQueueItem(action, recordId, payload, integrationType = "postgres_api") {
   return {
     id: genId(),
     action,
     recordId,
     payload,
+    integrationType,
     createdAt: new Date().toISOString(),
     retryCount: 0,
     lastError: "",

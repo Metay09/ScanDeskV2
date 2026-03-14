@@ -406,7 +406,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
             });
         } else if (integration.type === "gsheets") {
           syncRecordToSheets(integration.gsheets, newRecord, fields)
-            .catch(e => console.error("Sheets devralma hatası:", e));
+            .catch(() => addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets"));
         }
       }
     });
