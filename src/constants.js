@@ -29,4 +29,5 @@ export const INITIAL_FIELDS = [
 
 export const FIELD_TYPES    = ["Metin", "Sayı", "Tarih", "Onay Kutusu"];
 export const DEFAULT_CUSTS  = ["Müşteri A", "Müşteri B"];
+export const DEFAULT_ACIKLAMAS = [];
 export const genId = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));

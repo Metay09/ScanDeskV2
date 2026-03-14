@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Ic, I } from "./Icon";
 import { genId } from "../constants";
-import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getShiftDate, deriveShiftDate } from "../utils";
+import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../utils";
 import { postgresApiInsert, sheetsInsert, syncRecordToSheets } from "../services/integrations";
 import { toDbPayload } from "../services/recordModel";
 import EditRecordModal from "./EditRecordModal";
 import CustomerPicker from "./CustomerPicker";
+import AciklamaPicker from "./AciklamaPicker";
 import ShiftInheritModal from "./ShiftInheritModal";
 import ShiftTakeoverPrompt from "./ShiftTakeoverPrompt";
 import FieldInput from "./FieldInput";
 import DetailFormModal from "./DetailFormModal";
 
-export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue }) {
+export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, aciklamalar, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue }) {
   const customerList = getCustomerList(customers);
+  const aciklamaList = getAciklamaList(aciklamalar);
   const normalizeCustomer = (val) => val === "-Boş-" ? "" : val;
   const inputRef  = useRef(null);
   const focusTimer = useRef(null);
@@ -524,23 +526,14 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
 
       {/* Açıklama (persistent field like customer) */}
       <div className="cust-bar">
-        <label className="lbl" style={{ marginBottom: 0, fontSize: 12 }}>Açıklama</label>
-        <input
-          type="text"
+        <AciklamaPicker
+          aciklamalar={aciklamaList}
           value={aciklama}
-          onChange={(e) => setAciklama(e.target.value)}
-          placeholder="Açıklama girin..."
-          style={{
-            flex: 1,
-            height: 40,
-            borderRadius: 10,
-            padding: "0 12px",
-            background: "var(--s2)",
-            color: "var(--tx)",
-            border: "1.5px solid var(--brd)",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
+          onChange={(val) => setAciklama(val)}
+          onClose={scheduleFocus}
+          canManage={true}
+          onAdd={aciklamalar.add}
+          onRemove={aciklamalar.remove}
         />
       </div>
 
@@ -686,6 +679,9 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
           onCustomerAdd={customers.add}
           onCustomerRemove={customers.remove}
           canManageCustomers={true}
+          aciklamaList={aciklamaList}
+          onAciklamaAdd={aciklamalar.add}
+          onAciklamaRemove={aciklamalar.remove}
           onSave={doSave}
           onClose={() => { setPendingBc(null); setBarcode(""); scheduleFocus(); }}
           onError={toast}
