@@ -1,0 +1,1996 @@
+import { useState, useEffect, useRef, useCallback, useReducer } from "react";
+import * as XLSX from "xlsx";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INITIAL STATE
+═══════════════════════════════════════════════════════════════════════════ */
+const INITIAL_USERS = [
+  { id: "u0", username: "admin", password: "admin123", role: "admin", name: "Admin", active: true },
+];
+
+const INITIAL_SETTINGS = {
+  autoSave: true,
+  addDetailAfterScan: false,
+  vibration: true,
+  beep: true,
+  frontCamera: false,
+  allowExport: true,
+  allowClearData: true,
+  allowAddField: true,
+  allowEditField: true,
+  allowDeleteField: true,
+};
+
+const INITIAL_FIELDS = [
+  { id: "barcode", label: "Barkod", type: "Metin", required: true, locked: true },
+  { id: "qty", label: "Miktar", type: "Sayı", required: false, locked: false },
+  { id: "note", label: "Not", type: "Metin", required: false, locked: false },
+];
+
+const FIELD_TYPES = ["Metin", "Sayı", "Tarih", "Onay Kutusu"];
+const DEFAULT_CUSTS = ["Müşteri A", "Müşteri B"];
+const genId = () => Math.random().toString(36).substr(2, 9);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INTEGRATIONS
+═══════════════════════════════════════════════════════════════════════════ */
+async function supabaseInsert(cfg, row) {
+  const r = await fetch(`${cfg.url.replace(/\/$/, "")}/rest/v1/${cfg.table}`, {
+    method: "POST",
+    headers: {
+      apikey: cfg.key,
+      Authorization: `Bearer ${cfg.key}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+}
+
+async function sheetsInsert(cfg, headers, row) {
+  await fetch(cfg.scriptUrl, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ headers, row }),
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BEEP
+═══════════════════════════════════════════════════════════════════════════ */
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 1900;
+    osc.type = "square";
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.11);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.11);
+  } catch {}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STYLES
+═══════════════════════════════════════════════════════════════════════════ */
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body,#root{height:100%;width:100%;}
+:root{
+  --bg:#0d0f12;--s1:#161920;--s2:#1e2228;--s3:#262b34;
+  --brd:#2e3440;--brd2:#3d4555;
+  --acc:#f59e0b;--acc2:rgba(245,158,11,.14);--acc3:rgba(245,158,11,.35);
+  --ok:#22c55e;--ok2:rgba(34,197,94,.14);--ok3:rgba(34,197,94,.38);
+  --err:#ef4444;--err2:rgba(239,68,68,.14);--err3:rgba(239,68,68,.35);
+  --inf:#3b82f6;--inf2:rgba(59,130,246,.14);--inf3:rgba(59,130,246,.35);
+  --pur:#a855f7;--pur2:rgba(168,85,247,.14);--pur3:rgba(168,85,247,.35);
+  --tx:#f1f3f7;--tx2:#8a93a8;--tx3:#3f4a5e;
+  --r:10px;--r2:14px;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+body{background:var(--bg);color:var(--tx);font-family:var(--font);
+  -webkit-text-size-adjust:100%;touch-action:manipulation;overflow-x:hidden;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--brd2);border-radius:2px;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:0 18px;height:48px;border-radius:var(--r);font-family:var(--font);
+  font-weight:700;font-size:14px;cursor:pointer;border:none;transition:.12s;
+  -webkit-tap-highlight-color:transparent;user-select:none;white-space:nowrap;flex-shrink:0;}
+.btn-sm{height:38px;font-size:13px;padding:0 12px;}
+.btn-lg{height:62px;font-size:17px;}
+.btn-full{width:100%;}
+.btn-primary{background:var(--acc);color:#000;} .btn-primary:active{filter:brightness(.88);}
+.btn-ok{background:var(--ok2);color:var(--ok);border:1.5px solid var(--ok3);} .btn-ok:active{filter:brightness(1.12);}
+.btn-ghost{background:var(--s2);color:var(--tx2);border:1.5px solid var(--brd);} .btn-ghost:active{background:var(--s3);}
+.btn-danger{background:var(--err2);color:var(--err);border:1.5px solid var(--err3);} .btn-danger:active{filter:brightness(1.15);}
+.btn-info{background:var(--inf2);color:var(--inf);border:1.5px solid var(--inf3);}
+.btn-pur{background:var(--pur2);color:var(--pur);border:1.5px solid var(--pur3);}
+
+/* ── FORM ── */
+input,select,textarea{
+  width:100%;background:var(--s2);border:1.5px solid var(--brd);
+  border-radius:var(--r);padding:0 14px;height:48px;color:var(--tx);
+  font-family:var(--font);font-size:15px;outline:none;
+  transition:.12s border-color,box-shadow;-webkit-appearance:none;appearance:none;}
+textarea{height:auto;padding:12px 14px;resize:none;line-height:1.5;}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc2);}
+input::placeholder,textarea::placeholder{color:var(--tx3);}
+select option{background:var(--s2);}
+input.barcode-input{height:70px;font-size:22px;font-family:var(--mono);letter-spacing:.05em;}
+input.barcode-input:focus{border-color:var(--ok);box-shadow:0 0 0 4px var(--ok2);}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc);}
+input[type=date]{font-family:var(--font);}
+label.lbl{display:block;font-size:11px;font-weight:700;color:var(--tx2);
+  letter-spacing:.09em;text-transform:uppercase;margin-bottom:6px;}
+.fg{margin-bottom:14px;}
+.err-msg{background:var(--err2);border:1.5px solid var(--err3);color:var(--err);
+  padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:12px;}
+.ok-msg{background:var(--ok2);border:1.5px solid var(--ok3);color:var(--ok);
+  padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:12px;}
+
+/* ── SHELL ── */
+.login-wrap{min-height:100dvh;display:flex;align-items:center;justify-content:center;
+  padding:16px;background:radial-gradient(ellipse at 30% 20%,rgba(245,158,11,.07),transparent 55%),var(--bg);}
+.login-box{width:100%;max-width:380px;background:var(--s1);border:1.5px solid var(--brd);
+  border-radius:var(--r2);padding:36px 28px;box-shadow:0 4px 32px rgba(0,0,0,.5);}
+
+.shell{display:flex;flex-direction:column;height:100dvh;overflow:hidden;}
+.topbar{display:flex;align-items:center;padding:0 14px;height:52px;
+  background:var(--s1);border-bottom:1.5px solid var(--brd);flex-shrink:0;gap:8px;}
+.scroll-area{flex:1;overflow-y:auto;overflow-x:hidden;}
+.page{padding:14px;max-width:720px;margin:0 auto;padding-bottom:78px;}
+
+.bot-nav{height:62px;background:var(--s1);border-top:1.5px solid var(--brd);
+  display:flex;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom);}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;border:none;background:none;color:var(--tx3);
+  -webkit-tap-highlight-color:transparent;font-size:10px;font-weight:700;
+  font-family:var(--font);}
+.nav-btn.active{color:var(--acc);}
+.nav-btn:active{background:var(--s2);}
+.nav-badge{background:var(--acc);color:#000;font-size:9px;font-weight:800;
+  border-radius:6px;padding:1px 5px;line-height:13px;}
+
+/* ── IDENTITY ── */
+.logo-icon{display:flex;align-items:center;justify-content:center;
+  background:var(--acc2);border:1.5px solid var(--acc3);color:var(--acc);flex-shrink:0;}
+.avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;flex-shrink:0;background:var(--acc2);border:1.5px solid var(--acc3);color:var(--acc);}
+.user-pill{display:flex;align-items:center;gap:6px;background:var(--s2);
+  border:1.5px solid var(--brd);border-radius:20px;padding:4px 10px 4px 5px;}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.04em;}
+.badge-acc{background:var(--acc2);color:var(--acc);}
+.badge-ok{background:var(--ok2);color:var(--ok);}
+.badge-err{background:var(--err2);color:var(--err);}
+.badge-inf{background:var(--inf2);color:var(--inf);}
+.tag{background:var(--s3);border:1px solid var(--brd);color:var(--tx2);
+  font-size:10px;padding:2px 7px;border-radius:4px;font-family:var(--mono);}
+
+/* ── SCAN ── */
+.cust-bar{display:flex;align-items:center;gap:8px;padding:10px 12px;
+  background:var(--s1);border:1.5px solid var(--brd);border-radius:var(--r);margin-bottom:10px;}
+.cust-btn{display:flex;align-items:center;gap:7px;background:var(--inf2);
+  border:1.5px solid var(--inf3);border-radius:8px;padding:8px 13px;
+  font-size:14px;font-weight:700;color:var(--inf);cursor:pointer;flex:1;min-width:0;
+  -webkit-tap-highlight-color:transparent;}
+.cust-btn:active{filter:brightness(1.12);}
+.cust-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pulse{width:8px;height:8px;border-radius:50%;flex-shrink:0;animation:pulse 1.8s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 currentColor}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+.status-bar{display:flex;align-items:center;gap:10px;padding:11px 14px;
+  border-radius:var(--r);margin-bottom:10px;font-size:14px;font-weight:600;}
+.s-ready{background:var(--ok2);border:1.5px solid var(--ok3);color:var(--ok);}
+.s-saved{background:var(--acc2);border:1.5px solid var(--acc3);color:var(--acc);}
+.s-cam{background:var(--inf2);border:1.5px solid var(--inf3);color:var(--inf);}
+
+.bc-wrap{position:relative;margin-bottom:10px;}
+.bc-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--tx3);pointer-events:none;}
+.bc-wrap .barcode-input{padding-left:50px;}
+
+.cam-box{border-radius:var(--r);overflow:hidden;border:1.5px solid var(--brd);
+  background:#000;position:relative;margin-bottom:10px;}
+.cam-video{width:100%;display:block;max-height:220px;object-fit:cover;}
+.cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.cam-frame{width:210px;height:100px;border:2.5px solid var(--acc);border-radius:8px;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.44);position:relative;overflow:hidden;}
+.cam-line{position:absolute;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--acc),transparent);
+  animation:scan 2s ease-in-out infinite;}
+@keyframes scan{0%,100%{top:8%}50%{top:88%}}
+
+.last-scan{padding:11px 14px;border-radius:var(--r);margin-bottom:10px;
+  background:var(--ok2);border:1.5px solid var(--ok3);
+  display:flex;align-items:flex-start;gap:10px;animation:slideUp .22s ease;}
+@keyframes slideUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.last-code{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ok);word-break:break-all;}
+.sig-line{font-size:11px;color:var(--tx2);margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.sig-bar{display:flex;align-items:center;gap:8px;padding:9px 12px;
+  background:var(--pur2);border:1.5px solid var(--pur3);border-radius:var(--r);
+  margin-bottom:10px;font-size:12px;color:var(--pur);font-weight:600;}
+
+.detail-form{background:var(--s1);border:1.5px solid var(--acc3);border-radius:var(--r);
+  padding:14px;margin-bottom:10px;display:flex;flex-direction:column;gap:11px;animation:slideUp .22s ease;}
+.detail-bc{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--acc);
+  padding:8px 12px;background:var(--acc2);border-radius:var(--r);word-break:break-all;}
+
+/* ── DATA ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.stat{background:var(--s1);border:1.5px solid var(--brd);border-radius:var(--r);padding:12px 8px;text-align:center;}
+.stat-val{font-family:var(--mono);font-size:19px;font-weight:700;}
+.stat-lbl{font-size:9px;color:var(--tx2);margin-top:2px;text-transform:uppercase;letter-spacing:.06em;}
+
+.tbl-wrap{overflow-x:auto;border-radius:var(--r);border:1.5px solid var(--brd);}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tbl th{background:var(--s2);color:var(--tx2);font-size:9px;font-weight:700;
+  letter-spacing:.07em;text-transform:uppercase;padding:9px 9px;text-align:left;
+  border-bottom:1.5px solid var(--brd);white-space:nowrap;}
+.tbl td{padding:9px 9px;border-bottom:1px solid var(--brd);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:active td{background:var(--s2);}
+.bc{font-family:var(--mono);font-size:11px;color:var(--acc);font-weight:700;word-break:break-all;}
+.sig-cell{font-size:11px;color:var(--pur);font-weight:600;}
+.empty-state{padding:44px 16px;text-align:center;color:var(--tx3);}
+
+.group-hd{display:flex;align-items:center;gap:8px;padding:7px 10px;
+  background:var(--inf2);border:1.5px solid var(--inf3);border-radius:var(--r);
+  margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--inf);}
+.group-count{background:var(--inf);color:#000;font-size:9px;font-weight:800;
+  border-radius:5px;padding:2px 6px;margin-left:auto;}
+.srch{position:relative;flex:1;}
+.srch input{padding-left:42px;}
+.srch-ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--tx3);pointer-events:none;}
+.export-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;
+  display:flex;align-items:flex-end;justify-content:center;}
+@media(min-width:480px){.overlay{align-items:center;}}
+.modal{background:var(--s1);border:1.5px solid var(--brd);
+  border-radius:var(--r2) var(--r2) 0 0;width:100%;max-width:520px;
+  max-height:92dvh;overflow-y:auto;box-shadow:0 4px 32px rgba(0,0,0,.6);animation:mUp .2s ease;}
+@media(min-width:480px){.modal{border-radius:var(--r2);}}
+@keyframes mUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.modal-hd{padding:14px 16px;border-bottom:1.5px solid var(--brd);
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;background:var(--s1);z-index:1;}
+.modal-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;}
+.modal-bd{padding:16px;display:flex;flex-direction:column;gap:12px;}
+.modal-ft{padding:12px 16px;border-top:1.5px solid var(--brd);display:flex;gap:8px;
+  position:sticky;bottom:0;background:var(--s1);}
+.x-btn{width:34px;height:34px;border-radius:8px;background:var(--s2);border:1.5px solid var(--brd);
+  color:var(--tx2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.x-btn:active{background:var(--s3);}
+
+/* ── SETTINGS ── */
+.setting-section{margin-bottom:20px;}
+.section-hd{font-size:12px;font-weight:700;color:var(--tx2);padding:10px 16px 6px;
+  text-transform:uppercase;letter-spacing:.08em;}
+.s-card{background:var(--s1);border-top:1px solid var(--brd);border-bottom:1px solid var(--brd);margin-bottom:16px;}
+.s-row{display:flex;align-items:center;min-height:52px;padding:0 16px;
+  gap:12px;border-bottom:1px solid var(--brd);cursor:default;}
+.s-row:last-child{border-bottom:none;}
+.s-row.clickable{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.s-row.clickable:active{background:var(--s2);}
+.s-label{flex:1;font-size:14px;font-weight:500;}
+.s-sub{font-size:12px;color:var(--tx2);margin-top:1px;}
+.s-val{font-size:13px;color:var(--tx2);display:flex;align-items:center;gap:6px;}
+
+/* TOGGLE */
+.tog{width:48px;height:26px;border-radius:13px;position:relative;
+  transition:.18s background;cursor:pointer;flex-shrink:0;border:none;}
+.tog-k{position:absolute;top:3px;width:18px;height:18px;border-radius:50%;
+  transition:.18s left;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);}
+
+/* ── USERS ── */
+.user-card{background:var(--s1);border:1.5px solid var(--brd);border-radius:var(--r);
+  padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;}
+.user-avatar-lg{width:44px;height:44px;border-radius:50%;background:var(--acc2);
+  border:2px solid var(--acc3);color:var(--acc);display:flex;align-items:center;
+  justify-content:center;font-size:17px;font-weight:800;flex-shrink:0;}
+.user-info{flex:1;min-width:0;}
+.user-actions{display:flex;gap:6px;flex-shrink:0;}
+
+/* ── INT CARD ── */
+.int-card{background:var(--s1);border:1.5px solid var(--brd);border-radius:var(--r2);overflow:hidden;margin:0 0 10px;}
+.int-hd{padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;border-bottom:1.5px solid transparent;transition:.12s;}
+.int-hd.open{border-bottom-color:var(--brd);}
+.int-hd:active{background:var(--s2);}
+.int-bd{padding:14px;display:flex;flex-direction:column;gap:12px;}
+.info-box{padding:11px 13px;border-radius:var(--r);font-size:12px;line-height:1.65;}
+.info-box.inf{background:var(--inf2);border:1.5px solid var(--inf3);color:var(--inf);}
+.info-box.ok{background:var(--ok2);border:1.5px solid var(--ok3);color:var(--ok);}
+.info-box.warn{background:var(--acc2);border:1.5px solid var(--acc3);color:var(--acc);}
+.info-box code{font-family:var(--mono);font-size:11px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px;}
+
+/* ── FIELDS ── */
+.field-card{background:var(--s1);border:1.5px solid var(--brd);border-radius:var(--r);padding:14px;margin-bottom:10px;}
+.chk-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx2);cursor:pointer;}
+
+/* ── DESKTOP ── */
+@media(min-width:640px){
+  .topbar{display:none;}
+  .bot-nav{display:none;}
+  .shell{flex-direction:row;}
+  .scroll-area{padding-bottom:0;}
+  .page{padding:22px;}
+  .side-nav{display:flex!important;flex-direction:column;width:210px;
+    background:var(--s1);border-right:1.5px solid var(--brd);padding:18px 10px;flex-shrink:0;}
+  .side-logo{display:flex;align-items:center;gap:9px;padding:0 8px;margin-bottom:22px;font-size:16px;font-weight:800;}
+  .side-item{display:flex;align-items:center;gap:9px;padding:12px 12px;border-radius:var(--r);
+    cursor:pointer;color:var(--tx2);font-size:13px;font-weight:600;transition:.12s;
+    border:none;background:none;width:100%;-webkit-tap-highlight-color:transparent;}
+  .side-item:hover{background:var(--s2);color:var(--tx);}
+  .side-item.active{background:var(--acc2);color:var(--acc);}
+  .side-footer{margin-top:auto;padding-top:14px;border-top:1.5px solid var(--brd);}
+  .section-hd{padding-left:0;}
+  .s-card{border:1.5px solid var(--brd);border-radius:var(--r2);}
+  .s-row{padding:0 14px;}
+}
+@media(max-width:639px){.side-nav{display:none!important;}}
+
+/* ── TOAST ── */
+.toast-stack{position:fixed;bottom:70px;right:12px;display:flex;flex-direction:column;
+  gap:6px;z-index:999;max-width:calc(100vw - 24px);}
+@media(min-width:640px){.toast-stack{bottom:16px;}}
+.toast{background:var(--s1);border:1.5px solid;border-radius:var(--r);
+  padding:10px 14px;box-shadow:0 4px 20px rgba(0,0,0,.5);
+  display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+  animation:tIn .2s ease;max-width:340px;}
+@keyframes tIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+`;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ICON
+═══════════════════════════════════════════════════════════════════════════ */
+const Ic = ({ d, s = 20, sw = 2 }) => (
+  <svg
+    width={s}
+    height={s}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={sw}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {Array.isArray(d) ? d.map((p, i) => <path key={i} d={p} />) : <path d={d} />}
+  </svg>
+);
+const I = {
+  scan: "M6 2H4a2 2 0 00-2 2v2M18 2h2a2 2 0 012 2v2M6 22H4a2 2 0 01-2-2v-2M18 22h2a2 2 0 002-2v-2M8 12h8",
+  data: "M3 3h18v18H3zM3 9h18M3 15h18M9 3v18",
+  fields: "M12 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z",
+  users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+  settings:
+    "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 012.83-2.83l-.06-.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 00-1.51-1H17a2 2 0 010-4h.09A1.65 1.65 0 0019.4 9",
+  save: "M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2zM17 21v-8H7v8M7 3v5h8",
+  xlsx: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M8 13h8M8 17h8",
+  csv: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6",
+  del: "M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2",
+  edit:
+    "M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z",
+  logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+  search: "M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z",
+  check: "M20 6L9 17l-5-5",
+  plus: "M12 5v14M5 12h14",
+  barcode: "M6 4v16M10 4v16M14 4v8M18 4v16M2 8h2M2 12h2M2 16h2M14 14h4v6h-4z",
+  sig: "M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z",
+  user: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z",
+  x: "M18 6L6 18M6 6l12 12",
+  lock: "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4",
+  key:
+    "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4",
+  chevD: "M6 9l6 6 6-6",
+  chevR: "M9 18l6-6-6-6",
+  camera:
+    "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z",
+  camOff: "M1 1l22 22M17 17H3a2 2 0 01-2-2V8a2 2 0 012-2h3m3-3h6l2 3h3a2 2 0 012 2v9.34m-7.72-2.06A4 4 0 118.28 8.28",
+  vib: "M2 8.5v7M5 6v12M8 4v16M22 8.5v7M19 6v12M16 4v16M11 4v16",
+  bell: "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0",
+  cloud: "M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z",
+  sheets: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M8 10h8M8 14h8M8 18h5",
+  trash: "M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2",
+  group:
+    "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75M9 11a4 4 0 100-8 4 4 0 000 8z",
+  eye:
+    "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 12m-3 0a3 3 0 106 0 3 3 0 00-6 0",
+  eyeOff:
+    "M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22",
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOGGLE COMPONENT
+═══════════════════════════════════════════════════════════════════════════ */
+const Toggle = ({ value, onChange, disabled }) => (
+  <button
+    type="button"
+    className="tog"
+    onClick={() => !disabled && onChange(!value)}
+    style={{
+      background: value ? "var(--acc)" : "var(--s3)",
+      border: "1.5px solid var(--brd2)",
+      opacity: disabled ? 0.4 : 1,
+      cursor: disabled ? "not-allowed" : "pointer",
+    }}
+  >
+    <div className="tog-k" style={{ left: value ? 27 : 3 }} />
+  </button>
+);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOAST HOOK
+═══════════════════════════════════════════════════════════════════════════ */
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const add = useCallback((msg, color = "var(--ok)") => {
+    const id = genId();
+    setToasts((p) => [...p, { id, msg, color }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 2800);
+  }, []);
+  return { toasts, add };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PASSWORD INPUT
+═══════════════════════════════════════════════════════════════════════════ */
+function PasswordInput({ value, onChange, placeholder }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder || "Şifre"}
+        style={{ paddingRight: 48 }}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((p) => !p)}
+        style={{
+          position: "absolute",
+          right: 14,
+          top: "50%",
+          transform: "translateY(-50%)",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          color: "var(--tx2)",
+        }}
+      >
+        <Ic d={show ? I.eyeOff : I.eye} s={18} />
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOGIN
+═══════════════════════════════════════════════════════════════════════════ */
+function Login({ users, onLogin }) {
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
+  const go = () => {
+    const f = users.find((x) => x.username === u && x.password === p && x.active !== false);
+    if (f) onLogin(f);
+    else setErr("Kullanıcı adı veya şifre hatalı.");
+  };
+  return (
+    <div className="login-wrap">
+      <div className="login-box">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div className="logo-icon" style={{ width: 42, height: 42, borderRadius: 11 }}>
+            <Ic d={I.barcode} s={21} />
+          </div>
+          <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.4px" }}>ScanDesk</span>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--tx2)", marginBottom: 28 }}>
+          Barkod yönetim sistemine giriş yapın
+        </p>
+        {err && <div className="err-msg">{err}</div>}
+        <div className="fg">
+          <label className="lbl">Kullanıcı Adı</label>
+          <input
+            value={u}
+            onChange={(e) => setU(e.target.value)}
+            placeholder="kullanici_adi"
+            autoCapitalize="none"
+            autoCorrect="off"
+            onKeyDown={(e) => e.key === "Enter" && go()}
+          />
+        </div>
+        <div className="fg">
+          <label className="lbl">Şifre</label>
+          <PasswordInput value={p} onChange={(e) => setP(e.target.value)} />
+        </div>
+        <button className="btn btn-primary btn-full btn-lg" onClick={go}>
+          Giriş Yap
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOMER MODAL
+═══════════════════════════════════════════════════════════════════════════ */
+function CustomerModal({ customers, selected, onSelect, onClose, onAdd, onRemove, isAdmin }) {
+  const [newName, setNewName] = useState("");
+  const add = () => {
+    if (newName.trim()) {
+      onAdd(newName.trim());
+      setNewName("");
+    }
+  };
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-hd">
+          <span className="modal-title">
+            <Ic d={I.group} s={16} />
+            Müşteri Seç
+          </span>
+          <button className="x-btn" onClick={onClose}>
+            <Ic d={I.x} s={15} />
+          </button>
+        </div>
+        <div className="modal-bd">
+          {isAdmin && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Yeni müşteri adı..."
+                onKeyDown={(e) => e.key === "Enter" && add()}
+              />
+              <button className="btn btn-primary btn-sm" onClick={add}>
+                <Ic d={I.plus} s={15} />
+              </button>
+            </div>
+          )}
+          {customers.length === 0 && (
+            <p style={{ color: "var(--tx3)", fontSize: 13, textAlign: "center" }}>Henüz müşteri eklenmedi</p>
+          )}
+          {customers.map((c) => (
+            <div
+              key={c}
+              onClick={() => {
+                onSelect(c);
+                onClose();
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "12px 14px",
+                background: selected === c ? "var(--inf2)" : "var(--s2)",
+                border: `1.5px solid ${selected === c ? "var(--inf3)" : "var(--brd)"}`,
+                borderRadius: "var(--r)",
+                cursor: "pointer",
+              }}
+            >
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: selected === c ? "var(--inf)" : "var(--tx3)",
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: selected === c ? "var(--inf)" : "var(--tx)",
+                }}
+              >
+                {c}
+              </span>
+              {selected === c && <Ic d={I.check} s={15} />}
+              {isAdmin && selected !== c && (
+                <button
+                  className="btn btn-danger btn-sm"
+                  style={{ height: 30, padding: "0 8px" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(c);
+                  }}
+                >
+                  <Ic d={I.del} s={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDIT RECORD MODAL
+═══════════════════════════════════════════════════════════════════════════ */
+function EditRecordModal({ record, fields, customers, onSave, onClose }) {
+  const [form, setForm] = useState({ ...record });
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const allF = [{ id: "barcode", label: "Barkod", type: "Metin" }, ...fields.filter((f) => f.id !== "barcode")];
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-hd">
+          <span className="modal-title">
+            <Ic d={I.edit} s={16} />
+            Kaydı Düzenle
+          </span>
+          <button className="x-btn" onClick={onClose}>
+            <Ic d={I.x} s={15} />
+          </button>
+        </div>
+        <div className="modal-bd">
+          {allF.map((f) => (
+            <div key={f.id}>
+              <label className="lbl">{f.label}</label>
+              {f.type === "Onay Kutusu" ? (
+                <label
+                  className="chk-row"
+                  style={{
+                    height: 48,
+                    border: "1.5px solid var(--brd)",
+                    borderRadius: "var(--r)",
+                    padding: "0 14px",
+                    background: "var(--s2)",
+                  }}
+                >
+                  <input type="checkbox" checked={!!form[f.id]} onChange={(e) => set(f.id, e.target.checked)} />
+                  <span>{f.label}</span>
+                </label>
+              ) : f.type === "Tarih" ? (
+                <input type="date" value={form[f.id] || ""} onChange={(e) => set(f.id, e.target.value)} />
+              ) : f.type === "Sayı" ? (
+                <input type="number" inputMode="numeric" value={form[f.id] || ""} onChange={(e) => set(f.id, e.target.value)} />
+              ) : (
+                <input type="text" value={form[f.id] || ""} onChange={(e) => set(f.id, e.target.value)} />
+              )}
+            </div>
+          ))}
+          <div>
+            <label className="lbl">Müşteri</label>
+            <select value={form.customer || ""} onChange={(e) => set("customer", e.target.value)}>
+              <option value="">— Seçiniz —</option>
+              {customers.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div
+            style={{
+              padding: "9px 12px",
+              background: "var(--pur2)",
+              border: "1.5px solid var(--pur3)",
+              borderRadius: "var(--r)",
+              fontSize: 12,
+              color: "var(--pur)",
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            <Ic d={I.sig} s={13} /> Kaydeden: <b>{form.scanned_by}</b>
+          </div>
+        </div>
+        <div className="modal-ft">
+          <button
+            className="btn btn-ok"
+            style={{ flex: 1 }}
+            onClick={() => {
+              onSave(form);
+              onClose();
+            }}
+          >
+            <Ic d={I.save} s={16} /> Güncelle
+          </button>
+          <button className="btn btn-ghost" style={{ width: 88 }} onClick={onClose}>
+            İptal
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCAN PAGE
+═══════════════════════════════════════════════════════════════════════════ */
+function ScanPage({ fields, onSave, lastSaved, customers, isAdmin, user, integration, scanSettings, toast }) {
+  const inputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const detRef = useRef(null);
+  const rafRef = useRef(null);
+  const focusTimer = useRef(null);
+
+  const [barcode, setBarcode] = useState("");
+  const [extras, setExtras] = useState({});
+  const [flash, setFlash] = useState("ready");
+  const [custModal, setCustModal] = useState(false);
+  const [customer, setCustomer] = useState(customers.list[0] || "");
+  const [camActive, setCamActive] = useState(false);
+  const [pendingBc, setPendingBc] = useState(null);
+
+  const { autoSave, addDetailAfterScan, vibration, beep, frontCamera } = scanSettings;
+
+  useEffect(() => {
+    if (customers.list.length && !customer) setCustomer(customers.list[0]);
+  }, [customers.list]);
+
+  useEffect(() => {
+    if (typeof BarcodeDetector !== "undefined") {
+      BarcodeDetector.getSupportedFormats()
+        .then((fmts) => {
+          detRef.current = new BarcodeDetector({ formats: fmts });
+        })
+        .catch(() => {
+          detRef.current = new BarcodeDetector();
+        });
+    }
+    return () => {
+      stopCamera();
+      clearTimeout(focusTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Smart focus: delay allows button clicks to register before input steals focus
+  const scheduleFocus = useCallback(() => {
+    clearTimeout(focusTimer.current);
+    focusTimer.current = setTimeout(() => {
+      if (!camActive && inputRef.current && document.activeElement !== inputRef.current) {
+        inputRef.current.focus({ preventScroll: true });
+      }
+    }, 120);
+  }, [camActive]);
+
+  useEffect(() => {
+    scheduleFocus();
+  }, [scheduleFocus]);
+
+  /* ── Camera ── */
+  const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast("Bu tarayıcı kamera erişimini desteklemiyor.", "var(--err)");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: frontCamera ? "user" : "environment" },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setCamActive(true);
+      if (detRef.current) requestAnimationFrame(detectFrame);
+      else toast("Bu tarayıcı otomatik barkod tespitini desteklemiyor. Manuel giriş yapın.", "var(--acc)");
+    } catch (e) {
+      toast("Kamera izni alınamadı: " + e.message, "var(--err)");
+    }
+  };
+
+  const detectFrame = async () => {
+    if (!videoRef.current || !detRef.current || !streamRef.current) return;
+    try {
+      const barcodes = await detRef.current.detect(videoRef.current);
+      if (barcodes.length > 0) {
+        const code = barcodes[0].rawValue;
+        stopCamera();
+        if (addDetailAfterScan) {
+          setPendingBc(code);
+          setBarcode(code);
+        } else doSaveCode(code, {});
+        return;
+      }
+    } catch {}
+    rafRef.current = requestAnimationFrame(detectFrame);
+  };
+
+  const stopCamera = () => {
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCamActive(false);
+    scheduleFocus();
+  };
+
+  /* ── Save ── */
+  const doSaveCode = useCallback(
+    (code, extrasOverride) => {
+      const bc = (code || "")
+        .replace(/\r?\n/g, "") // bazı cihazlar CR/LF gönderebilir
+        .trim();
+      if (!bc) {
+        scheduleFocus();
+        return;
+      }
+
+      const now = new Date();
+      const extraFields = fields.filter((f) => f.id !== "barcode");
+      const row = {
+        id: genId(),
+        timestamp: now.toISOString(),
+        barcode: bc,
+        customer: customer || "",
+        scanned_by: user.name,
+        scanned_by_username: user.username,
+        synced: false,
+      };
+      extraFields.forEach((f) => {
+        const v = (extrasOverride ?? extras)[f.id];
+        row[f.id] = f.type === "Tarih" && !v ? now.toISOString().slice(0, 10) : v ?? "";
+      });
+
+      onSave(row);
+      setBarcode("");
+      setExtras({});
+      setPendingBc(null);
+      setFlash("saved");
+      setTimeout(() => {
+        setFlash("ready");
+        scheduleFocus();
+      }, 700);
+
+      if (vibration && navigator.vibrate) navigator.vibrate([25, 15, 25]);
+      if (beep) playBeep();
+
+      if (integration.active) {
+        const ef = fields.filter((f) => f.id !== "barcode");
+        const headers = ["Barkod", ...ef.map((f) => f.label), "Müşteri", "Kaydeden", "Kullanıcı Adı", "Tarih", "Saat"];
+        const rowArr = [
+          bc,
+          ...ef.map((f) => row[f.id] ?? ""),
+          row.customer,
+          row.scanned_by,
+          row.scanned_by_username,
+          now.toLocaleDateString("tr-TR"),
+          now.toLocaleTimeString("tr-TR"),
+        ];
+        if (integration.type === "supabase")
+          supabaseInsert(integration.supabase, { ...row, id: undefined }).catch((e) =>
+            toast("Supabase hatası: " + e.message, "var(--err)")
+          );
+        else sheetsInsert(integration.gsheets, headers, rowArr).catch((e) => toast("Sheets hatası: " + e.message, "var(--err)"));
+      }
+    },
+    [customer, extras, fields, user, onSave, scheduleFocus, vibration, beep, integration, toast]
+  );
+
+  const doSave = useCallback(() => {
+    if (pendingBc) doSaveCode(pendingBc, extras);
+    else doSaveCode(barcode, extras);
+  }, [pendingBc, barcode, extras, doSaveCode]);
+
+  // ✅ EL TERMİNALİ UYUMLU: Enter + Tab ile kaydet
+  const handleKey = (e) => {
+    if (e.key !== "Enter" && e.key !== "Tab") return;
+    e.preventDefault();
+
+    const bc = (barcode || "").replace(/\r?\n/g, "").trim();
+
+    if (addDetailAfterScan && bc && !pendingBc) {
+      setPendingBc(bc);
+      return;
+    }
+    if (autoSave || pendingBc) doSave();
+  };
+
+  const extraFields = fields.filter((f) => f.id !== "barcode");
+
+  return (
+    <div className="page">
+      {/* Müşteri */}
+      <div className="cust-bar">
+        <Ic d={I.group} s={15} />
+        <span style={{ fontSize: 12, color: "var(--tx2)", fontWeight: 600, flexShrink: 0 }}>Müşteri:</span>
+        <button type="button" className="cust-btn" onClick={() => setCustModal(true)}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--inf)", flexShrink: 0 }} />
+          <span className="cust-name">{customer || "Seçilmedi"}</span>
+          <Ic d={I.chevD} s={13} />
+        </button>
+      </div>
+
+      {/* Status */}
+      <div className={`status-bar ${flash === "saved" ? "s-saved" : camActive ? "s-cam" : "s-ready"}`}>
+        {flash === "saved" ? (
+          <>
+            <Ic d={I.check} s={16} /> Kaydedildi!
+          </>
+        ) : camActive ? (
+          <>
+            <div className="pulse" style={{ background: "var(--inf)", color: "var(--inf)" }} /> Kamera aktif
+          </>
+        ) : (
+          <>
+            <div className="pulse" style={{ color: "var(--ok)" }} /> {autoSave ? "Hazır — okutun" : "Okutun, ardından Kaydet'e basın"}
+          </>
+        )}
+      </div>
+
+      {/* Camera */}
+      {camActive && (
+        <div className="cam-box">
+          <video ref={videoRef} autoPlay playsInline muted className="cam-video" />
+          <div className="cam-overlay">
+            <div className="cam-frame">
+              <div className="cam-line" />
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        {!camActive ? (
+          <button type="button" className="btn btn-ghost btn-full btn-sm" onClick={startCamera}>
+            <Ic d={I.camera} s={16} /> Kamerayı Aç
+          </button>
+        ) : (
+          <button type="button" className="btn btn-danger btn-full btn-sm" onClick={stopCamera}>
+            <Ic d={I.camOff} s={16} /> Kapat
+          </button>
+        )}
+      </div>
+
+      {/* Detail form */}
+      {pendingBc && addDetailAfterScan ? (
+        <div className="detail-form">
+          <div>
+            <label className="lbl">Taranan Barkod</label>
+            <div className="detail-bc">{pendingBc}</div>
+          </div>
+          {extraFields.map((f) => (
+            <div key={f.id}>
+              <label className="lbl">
+                {f.label}
+                {f.required ? " *" : ""}
+              </label>
+              {f.type === "Onay Kutusu" ? (
+                <label
+                  className="chk-row"
+                  style={{
+                    height: 48,
+                    border: "1.5px solid var(--brd)",
+                    borderRadius: "var(--r)",
+                    padding: "0 14px",
+                    background: "var(--s2)",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!extras[f.id]}
+                    onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.checked }))}
+                  />
+                  <span>{f.label}</span>
+                </label>
+              ) : f.type === "Tarih" ? (
+                <input type="date" value={extras[f.id] || ""} onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.value }))} />
+              ) : f.type === "Sayı" ? (
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={extras[f.id] || ""}
+                  onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.value }))}
+                />
+              ) : (
+                <input
+                  type="text"
+                  placeholder={f.label + "..."}
+                  value={extras[f.id] || ""}
+                  onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.value }))}
+                  autoFocus
+                />
+              )}
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ok" style={{ flex: 1 }} onClick={doSave}>
+              <Ic d={I.save} s={16} /> Kaydet
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setPendingBc(null);
+                setBarcode("");
+                setExtras({});
+                scheduleFocus();
+              }}
+            >
+              İptal
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Barcode input */}
+          <div className="bc-wrap">
+            <span className="bc-icon">
+              <Ic d={I.barcode} s={22} />
+            </span>
+            <input
+              ref={inputRef}
+              className="barcode-input"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              onKeyDown={handleKey}
+              onKeyPress={(e) => {
+                // bazı cihazlarda Enter "submit" davranışı üretebiliyor
+                if (e.key === "Enter") e.preventDefault();
+              }}
+              placeholder="Barkod okutun veya girin..."
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              inputMode="text"
+            />
+          </div>
+
+          {/* Extra fields (visible only if no addDetailAfterScan) */}
+          {!addDetailAfterScan && extraFields.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+              {extraFields.map((f) => (
+                <div key={f.id}>
+                  <label className="lbl">
+                    {f.label}
+                    {f.required ? " *" : ""}
+                  </label>
+                  {f.type === "Onay Kutusu" ? (
+                    <label
+                      className="chk-row"
+                      style={{
+                        height: 48,
+                        border: "1.5px solid var(--brd)",
+                        borderRadius: "var(--r)",
+                        padding: "0 14px",
+                        background: "var(--s2)",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!extras[f.id]}
+                        onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.checked }))}
+                      />
+                      <span>{f.label}</span>
+                    </label>
+                  ) : f.type === "Tarih" ? (
+                    <input type="date" value={extras[f.id] || ""} onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.value }))} />
+                  ) : f.type === "Sayı" ? (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={extras[f.id] || ""}
+                      onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.value }))}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder={f.label + "..."}
+                      value={extras[f.id] || ""}
+                      onChange={(e) => setExtras((p) => ({ ...p, [f.id]: e.target.value }))}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!autoSave && (
+            <button className="btn btn-ok btn-full btn-lg" style={{ marginBottom: 10 }} onClick={doSave}>
+              <Ic d={I.save} s={20} /> Kaydet
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Signature bar */}
+      <div className="sig-bar">
+        <Ic d={I.sig} s={14} />
+        <span>
+          İmza: <b>{user.name}</b> ({user.username})
+        </span>
+        {autoSave && <span style={{ opacity: 0.7 }}>· otomatik kayıt</span>}
+        {integration.active && (
+          <span style={{ marginLeft: "auto", opacity: 0.7, fontSize: 11 }}>
+            → {integration.type === "supabase" ? "Supabase" : "Sheets"}
+          </span>
+        )}
+      </div>
+
+      {/* Last scan */}
+      {lastSaved && (
+        <div className="last-scan">
+          <Ic d={I.check} s={16} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="last-code">{lastSaved.barcode}</div>
+            <div className="sig-line">
+              <Ic d={I.sig} s={10} />
+              {lastSaved.scanned_by}
+              {lastSaved.customer && (
+                <>
+                  <span>·</span>
+                  <span style={{ color: "var(--inf)" }}>{lastSaved.customer}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <span style={{ fontSize: 11, color: "var(--tx2)", fontFamily: "var(--mono)", flexShrink: 0 }}>
+            {new Date(lastSaved.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </span>
+        </div>
+      )}
+
+      {custModal && (
+        <CustomerModal
+          customers={customers.list}
+          selected={customer}
+          onSelect={(v) => {
+            setCustomer(v);
+            scheduleFocus();
+          }}
+          onClose={() => {
+            setCustModal(false);
+            scheduleFocus();
+          }}
+          onAdd={customers.add}
+          onRemove={customers.remove}
+          isAdmin={isAdmin}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA PAGE
+═══════════════════════════════════════════════════════════════════════════ */
+function DataPage({ fields, records, onDelete, onEdit, onExport, customers, settings }) {
+  const [q, setQ] = useState("");
+  const [grouped, setGrouped] = useState(true);
+  const [editRec, setEditRec] = useState(null);
+
+  const allF = [{ id: "barcode", label: "Barkod", type: "Metin" }, ...fields.filter((f) => f.id !== "barcode")];
+  const filtered = records.filter((r) =>
+    [...allF, { id: "customer" }, { id: "scanned_by" }].some((f) => String(r[f.id] ?? "").toLowerCase().includes(q.toLowerCase()))
+  );
+  const groups = {};
+  filtered.forEach((r) => {
+    const k = r.customer || "(Müşteri yok)";
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(r);
+  });
+
+  const Rows = ({ rows, showCust }) =>
+    rows.map((r) => (
+      <tr key={r.id}>
+        <td style={{ color: "var(--tx3)", fontSize: 10 }}>{records.indexOf(r) + 1}</td>
+        {allF.map((f) => (
+          <td key={f.id}>
+            {f.id === "barcode" ? (
+              <span className="bc">{r[f.id]}</span>
+            ) : f.type === "Onay Kutusu" ? (
+              <span
+                className={`badge ${r[f.id] ? "badge-ok" : ""}`}
+                style={!r[f.id] ? { color: "var(--tx3)" } : {}}
+              >
+                {r[f.id] ? "✓" : "—"}
+              </span>
+            ) : (
+              r[f.id] || <span style={{ color: "var(--tx3)" }}>—</span>
+            )}
+          </td>
+        ))}
+        {showCust && <td style={{ color: "var(--inf)", fontWeight: 600, fontSize: 12 }}>{r.customer || "—"}</td>}
+        <td>
+          <span className="sig-cell">{r.scanned_by}</span>
+        </td>
+        <td style={{ fontSize: 10, color: "var(--tx2)", fontFamily: "var(--mono)", whiteSpace: "nowrap" }}>
+          {new Date(r.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+        </td>
+        <td>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button className="btn btn-info btn-sm" style={{ height: 32, padding: "0 8px" }} onClick={() => setEditRec(r)}>
+              <Ic d={I.edit} s={12} />
+            </button>
+            <button className="btn btn-danger btn-sm" style={{ height: 32, padding: "0 8px" }} onClick={() => onDelete(r.id)}>
+              <Ic d={I.del} s={12} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    ));
+
+  const THead = ({ showCust }) => (
+    <thead>
+      <tr>
+        <th>#</th>
+        {allF.map((f) => (
+          <th key={f.id}>{f.label}</th>
+        ))}
+        {showCust && <th>Müşteri</th>}
+        <th>Kaydeden</th>
+        <th>Saat</th>
+        <th></th>
+      </tr>
+    </thead>
+  );
+
+  return (
+    <div className="page">
+      <div className="stats-row">
+        <div className="stat">
+          <div className="stat-val" style={{ color: "var(--acc)" }}>
+            {records.length}
+          </div>
+          <div className="stat-lbl">Kayıt</div>
+        </div>
+        <div className="stat">
+          <div className="stat-val" style={{ color: "var(--ok)" }}>
+            {new Set(records.map((r) => r.barcode)).size}
+          </div>
+          <div className="stat-lbl">Benzersiz</div>
+        </div>
+        <div className="stat">
+          <div className="stat-val" style={{ color: "var(--inf)" }}>
+            {new Set(records.map((r) => r.customer).filter(Boolean)).size}
+          </div>
+          <div className="stat-lbl">Müşteri</div>
+        </div>
+        <div className="stat">
+          <div className="stat-val" style={{ color: "var(--pur)" }}>
+            {new Set(records.map((r) => r.scanned_by).filter(Boolean)).size}
+          </div>
+          <div className="stat-lbl">Personel</div>
+        </div>
+      </div>
+
+      {settings.allowExport && (
+        <div className="export-row">
+          <button className="btn btn-ok btn-full" onClick={() => onExport("xlsx")}>
+            <Ic d={I.xlsx} s={15} /> Excel
+          </button>
+          <button className="btn btn-ghost btn-full" onClick={() => onExport("csv")}>
+            <Ic d={I.csv} s={15} /> CSV
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <div className="srch">
+          <span className="srch-ico">
+            <Ic d={I.search} s={16} />
+          </span>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ara..." />
+        </div>
+        <button className={`btn btn-sm ${grouped ? "btn-info" : "btn-ghost"}`} onClick={() => setGrouped((p) => !p)}>
+          <Ic d={I.group} s={15} />
+        </button>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="empty-state">
+          <Ic d={I.data} s={36} />
+          <p style={{ marginTop: 10, fontSize: 14 }}>Kayıt yok</p>
+        </div>
+      ) : grouped ? (
+        Object.entries(groups).map(([k, rows]) => (
+          <div key={k}>
+            <div className="group-hd">
+              <Ic d={I.user} s={13} />
+              {k}
+              <span className="group-count">{rows.length}</span>
+            </div>
+            <div className="tbl-wrap" style={{ marginBottom: 6 }}>
+              <table className="tbl">
+                <THead showCust={false} />
+                <tbody>
+                  <Rows rows={rows} showCust={false} />
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <THead showCust={true} />
+            <tbody>
+              <Rows rows={filtered} showCust={true} />
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {editRec && (
+        <EditRecordModal
+          record={editRec}
+          fields={fields}
+          customers={customers.list}
+          onSave={(r) => {
+            onEdit(r);
+            setEditRec(null);
+          }}
+          onClose={() => setEditRec(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   USERS PAGE
+═══════════════════════════════════════════════════════════════════════════ */
+function UsersPage({ users, setUsers, currentUser, toast }) {
+  const [modal, setModal] = useState(null); // null | { mode: "add"|"edit"|"pw", user? }
+  const [form, setForm] = useState({ name: "", username: "", password: "", role: "user", active: true });
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [err, setErr] = useState("");
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const openAdd = () => {
+    setErr("");
+    setForm({ name: "", username: "", password: "", role: "user", active: true });
+    setModal({ mode: "add" });
+  };
+  const openEdit = (u) => {
+    setErr("");
+    setForm({ ...u });
+    setModal({ mode: "edit", user: u });
+  };
+  const openPw = (u) => {
+    setErr("");
+    setPwForm({ current: "", next: "", confirm: "" });
+    setModal({ mode: "pw", user: u });
+  };
+
+  const saveUser = () => {
+    if (!form.name.trim() || !form.username.trim()) {
+      setErr("Ad ve kullanıcı adı zorunludur.");
+      return;
+    }
+    if (modal.mode === "add" && !form.password.trim()) {
+      setErr("Şifre zorunludur.");
+      return;
+    }
+    if (modal.mode === "add" && form.password.length < 4) {
+      setErr("Şifre en az 4 karakter olmalıdır.");
+      return;
+    }
+    if (modal.mode === "add" && users.find((u) => u.username === form.username.trim())) {
+      setErr("Bu kullanıcı adı zaten kullanılıyor.");
+      return;
+    }
+    if (modal.mode === "add") {
+      setUsers((p) => [...p, { ...form, id: genId(), username: form.username.trim() }]);
+      toast("Kullanıcı oluşturuldu");
+    } else {
+      setUsers((p) =>
+        p.map((u) =>
+          u.id === modal.user.id
+            ? { ...u, name: form.name, username: form.username.trim(), role: form.role, active: form.active }
+            : u
+        )
+      );
+      toast("Kullanıcı güncellendi", "var(--inf)");
+    }
+    setModal(null);
+  };
+
+  const changePw = () => {
+    setErr("");
+    const isOwn = modal.user.id === currentUser.id;
+    if (isOwn && modal.user.password !== pwForm.current) {
+      setErr("Mevcut şifre hatalı.");
+      return;
+    }
+    if (pwForm.next.length < 4) {
+      setErr("Yeni şifre en az 4 karakter olmalıdır.");
+      return;
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      setErr("Şifreler eşleşmiyor.");
+      return;
+    }
+    setUsers((p) => p.map((u) => (u.id === modal.user.id ? { ...u, password: pwForm.next } : u)));
+    toast("Şifre değiştirildi", "var(--ok)");
+    setModal(null);
+  };
+
+  const deleteUser = (u) => {
+    if (u.id === currentUser.id) {
+      toast("Kendi hesabınızı silemezsiniz.", "var(--err)");
+      return;
+    }
+    if (window.confirm(`"${u.name}" kullanıcısını silmek istediğinizden emin misiniz?`)) {
+      setUsers((p) => p.filter((x) => x.id !== u.id));
+      toast("Kullanıcı silindi", "var(--err)");
+    }
+  };
+
+  return (
+    <div className="page">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+        <button className="btn btn-primary" onClick={openAdd}>
+          <Ic d={I.plus} s={16} /> Kullanıcı Ekle
+        </button>
+      </div>
+
+      {users.map((u) => (
+        <div className="user-card" key={u.id}>
+          <div className="user-avatar-lg">{u.name[0].toUpperCase()}</div>
+          <div className="user-info">
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{u.name}</div>
+            <div style={{ fontSize: 12, color: "var(--tx2)", fontFamily: "var(--mono)", marginTop: 2 }}>@{u.username}</div>
+            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <span className={`badge ${u.role === "admin" ? "badge-acc" : "badge-inf"}`}>
+                {u.role === "admin" ? "Admin" : "Kullanıcı"}
+              </span>
+              {!u.active && <span className="badge badge-err">Devre Dışı</span>}
+              {u.id === currentUser.id && <span className="badge" style={{ background: "var(--pur2)", color: "var(--pur)" }}>Sen</span>}
+            </div>
+          </div>
+          <div className="user-actions">
+            <button className="btn btn-pur btn-sm" style={{ height: 36, padding: "0 10px" }} onClick={() => openPw(u)} title="Şifre Değiştir">
+              <Ic d={I.key} s={14} />
+            </button>
+            <button className="btn btn-info btn-sm" style={{ height: 36, padding: "0 10px" }} onClick={() => openEdit(u)} title="Düzenle">
+              <Ic d={I.edit} s={14} />
+            </button>
+            {u.id !== currentUser.id && (
+              <button className="btn btn-danger btn-sm" style={{ height: 36, padding: "0 10px" }} onClick={() => deleteUser(u)} title="Sil">
+                <Ic d={I.del} s={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Add / Edit User Modal */}
+      {modal && (modal.mode === "add" || modal.mode === "edit") && (
+        <div className="overlay" onClick={() => setModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-hd">
+              <span className="modal-title">
+                <Ic d={I.user} s={16} />
+                {modal.mode === "add" ? "Kullanıcı Ekle" : "Kullanıcıyı Düzenle"}
+              </span>
+              <button className="x-btn" onClick={() => setModal(null)}>
+                <Ic d={I.x} s={15} />
+              </button>
+            </div>
+            <div className="modal-bd">
+              {err && <div className="err-msg">{err}</div>}
+              <div>
+                <label className="lbl">Ad Soyad</label>
+                <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ad Soyad" />
+              </div>
+              <div>
+                <label className="lbl">Kullanıcı Adı</label>
+                <input
+                  value={form.username}
+                  onChange={(e) => set("username", e.target.value)}
+                  placeholder="kullanici_adi"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </div>
+              {modal.mode === "add" && (
+                <div>
+                  <label className="lbl">Şifre</label>
+                  <PasswordInput value={form.password} onChange={(e) => set("password", e.target.value)} />
+                </div>
+              )}
+              <div>
+                <label className="lbl">Rol</label>
+                <select value={form.role} onChange={(e) => set("role", e.target.value)}>
+                  <option value="user">Kullanıcı</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              {modal.mode === "edit" && (
+                <label className="chk-row">
+                  <input type="checkbox" checked={form.active !== false} onChange={(e) => set("active", e.target.checked)} />
+                  <span>Hesap aktif</span>
+                </label>
+              )}
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-ok" style={{ flex: 1 }} onClick={saveUser}>
+                <Ic d={I.save} s={16} /> {modal.mode === "add" ? "Oluştur" : "Güncelle"}
+              </button>
+              <button className="btn btn-ghost" style={{ width: 88 }} onClick={() => setModal(null)}>
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {modal && modal.mode === "pw" && (
+        <div className="overlay" onClick={() => setModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-hd">
+              <span className="modal-title">
+                <Ic d={I.key} s={16} />
+                Şifre Değiştir — {modal.user.name}
+              </span>
+              <button className="x-btn" onClick={() => setModal(null)}>
+                <Ic d={I.x} s={15} />
+              </button>
+            </div>
+            <div className="modal-bd">
+              {err && <div className="err-msg">{err}</div>}
+              {modal.user.id === currentUser.id && (
+                <div>
+                  <label className="lbl">Mevcut Şifre</label>
+                  <PasswordInput
+                    value={pwForm.current}
+                    onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
+                    placeholder="Mevcut şifre"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="lbl">Yeni Şifre</label>
+                <PasswordInput
+                  value={pwForm.next}
+                  onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))}
+                  placeholder="En az 4 karakter"
+                />
+              </div>
+              <div>
+                <label className="lbl">Yeni Şifre (Tekrar)</label>
+                <PasswordInput
+                  value={pwForm.confirm}
+                  onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
+                  placeholder="Tekrar girin"
+                />
+              </div>
+            </div>
+            <div className="modal-ft">
+              <button className="btn btn-ok" style={{ flex: 1 }} onClick={changePw}>
+                <Ic d={I.check} s={16} /> Değiştir
+              </button>
+              <button className="btn btn-ghost" style={{ width: 88 }} onClick={() => setModal(null)}>
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS PAGE
+═══════════════════════════════════════════════════════════════════════════ */
+function SettingsPage({ settings, setSettings, integration, setIntegration, isAdmin, onClearData, toast }) {
+  const set = (k, v) => setSettings((p) => ({ ...p, [k]: v }));
+  const [sbOpen, setSbOpen] = useState(false);
+  const [gsOpen, setGsOpen] = useState(false);
+  const [sb, setSb] = useState({ ...integration.supabase });
+  const [gs, setGs] = useState({ ...integration.gsheets });
+
+  const Row = ({ icon, label, sub, children, onClick }) => (
+    <div className={`s-row ${onClick ? "clickable" : ""}`} onClick={onClick}>
+      {icon && (
+        <div style={{ color: "var(--tx2)", flexShrink: 0 }}>
+          <Ic d={icon} s={17} />
+        </div>
+      )}
+      <div style={{ flex: 1 }}>
+        <div className="s-label">{label}</div>
+        {sub && <div className="s-sub">{sub}</div>}
+      </div>
+      <div className="s-val">{children}</div>
+    </div>
+  );
+
+  return (
+    <div className="page" style={{ paddingLeft: 0, paddingRight: 0 }}>
+      <div className="section-hd">Tarama</div>
+      <div className="s-card">
+        <Row icon={I.save} label="Otomatik Kaydet" sub="Her okumada Enter/Tab ile otomatik kaydeder">
+          <Toggle value={settings.autoSave} onChange={(v) => set("autoSave", v)} />
+        </Row>
+        <Row icon={I.edit} label="Taramadan Sonra Detay Ekle" sub="Önce barkod taranır, sonra diğer alanlar doldurulur">
+          <Toggle value={settings.addDetailAfterScan} onChange={(v) => set("addDetailAfterScan", v)} />
+        </Row>
+        <Row icon={I.vib} label="Titreşim">
+          <Toggle value={settings.vibration} onChange={(v) => set("vibration", v)} />
+        </Row>
+        <Row icon={I.bell} label="Bip Sesi">
+          <Toggle value={settings.beep} onChange={(v) => set("beep", v)} />
+        </Row>
+        <Row icon={I.camera} label="Ön Kamera" sub="Kamera açılırken selfie kamerayı kullan">
+          <Toggle value={settings.frontCamera} onChange={(v) => set("frontCamera", v)} />
+        </Row>
+      </div>
+
+      {isAdmin && (
+        <>
+          <div className="section-hd">Güvenlik & İzinler</div>
+          <div className="s-card">
+            <Row icon={I.xlsx} label="Dışa Aktarmaya İzin Ver">
+              <Toggle value={settings.allowExport} onChange={(v) => set("allowExport", v)} />
+            </Row>
+            <Row icon={I.trash} label="Verileri Temizlemeye İzin Ver">
+              <Toggle value={settings.allowClearData} onChange={(v) => set("allowClearData", v)} />
+            </Row>
+            <Row icon={I.plus} label="Alan Eklemeye İzin Ver">
+              <Toggle value={settings.allowAddField} onChange={(v) => set("allowAddField", v)} />
+            </Row>
+            <Row icon={I.edit} label="Alan Düzenlemeye İzin Ver">
+              <Toggle value={settings.allowEditField} onChange={(v) => set("allowEditField", v)} />
+            </Row>
+            <Row icon={I.del} label="Alan Silmeye İzin Ver">
+              <Toggle value={settings.allowDeleteField} onChange={(v) => set("allowDeleteField", v)} />
+            </Row>
+          </div>
+
+          <div className="section-hd">Entegrasyon</div>
+          {integration.active && (
+            <div
+              style={{
+                margin: "0 0 10px",
+                padding: "10px 12px",
+                background: "var(--ok2)",
+                border: "1.5px solid var(--ok3)",
+                borderRadius: "var(--r)",
+                fontSize: 12,
+                color: "var(--ok)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ok)" }} />
+              Aktif: {integration.type === "supabase" ? "Supabase (PostgreSQL)" : "Google Sheets"}
+              <button
+                className="btn btn-danger btn-sm"
+                style={{ marginLeft: "auto", height: 30 }}
+                onClick={() => setIntegration((p) => ({ ...p, active: false }))}
+              >
+                Durdur
+              </button>
+            </div>
+          )}
+
+          {/* Supabase */}
+          <div className="int-card">
+            <div className={`int-hd ${sbOpen ? "open" : ""}`} onClick={() => setSbOpen((p) => !p)}>
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  background: "rgba(62,207,142,.15)",
+                  border: "1.5px solid rgba(62,207,142,.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Ic d={I.cloud} s={17} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>Supabase (PostgreSQL)</div>
+                <div style={{ fontSize: 12, color: "var(--tx2)" }}>Gerçek zamanlı veritabanı</div>
+              </div>
+              {integration.active && integration.type === "supabase" && <span className="badge badge-ok">AKTİF</span>}
+              <Ic d={I.chevD} s={14} />
+            </div>
+            {sbOpen && (
+              <div className="int-bd">
+                <div className="info-box inf" style={{ fontSize: 12 }}>
+                  <b>1.</b> supabase.com → yeni proje oluştur
+                  <br />
+                  <b>2.</b> Project Settings → API → URL ve anon key kopyala
+                  <br />
+                  <b>3.</b> SQL Editor'de şu komutu çalıştır:
+                  <br />
+                  <textarea
+                    readOnly
+                    rows={5}
+                    style={{
+                      marginTop: 8,
+                      fontSize: 10,
+                      fontFamily: "var(--mono)",
+                      background: "rgba(0,0,0,.3)",
+                      border: "1px solid var(--brd)",
+                      borderRadius: "var(--r)",
+                      padding: 8,
+                      color: "var(--tx)",
+                    }}
+                    value={`CREATE TABLE taramalar (\n  barcode text,\n  customer text,\n  scanned_by text,\n  scanned_by_username text,\n  timestamp timestamptz,\n  qty text, note text\n);`}
+                  />
+                </div>
+                <div>
+                  <label className="lbl">Project URL</label>
+                  <input placeholder="https://xxxx.supabase.co" value={sb.url} onChange={(e) => setSb((p) => ({ ...p, url: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="lbl">Anon Key</label>
+                  <PasswordInput value={sb.key} onChange={(e) => setSb((p) => ({ ...p, key: e.target.value }))} placeholder="eyJhbGci..." />
+                </div>
+                <div>
+                  <label className="lbl">Tablo Adı</label>
+                  <input placeholder="taramalar" value={sb.table} onChange={(e) => setSb((p) => ({ ...p, table: e.target.value }))} />
+                </div>
+                <button
+                  className="btn btn-ok btn-full"
+                  onClick={() => {
+                    if (!sb.url || !sb.key || !sb.table) {
+                      toast("Tüm alanları doldurun", "var(--err)");
+                      return;
+                    }
+                    setIntegration({ type: "supabase", active: true, supabase: sb, gsheets: gs });
+                    toast("Supabase aktif edildi");
+                    setSbOpen(false);
+                  }}
+                >
+                  <Ic d={I.check} s={15} /> Aktif Et
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Google Sheets */}
+          <div className="int-card">
+            <div className={`int-hd ${gsOpen ? "open" : ""}`} onClick={() => setGsOpen((p) => !p)}>
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  background: "rgba(34,197,94,.15)",
+                  border: "1.5px solid rgba(34,197,94,.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Ic d={I.sheets} s={17} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>Google Sheets</div>
+                <div style={{ fontSize: 12, color: "var(--tx2)" }}>Apps Script ile doğrudan e-tabloya yaz</div>
+              </div>
+              {integration.active && integration.type === "gsheets" && <span className="badge badge-ok">AKTİF</span>}
+              <Ic d={I.chevD} s={14} />
+            </div>
+            {gsOpen && (
+              <div className="int-bd">
+                <div className="info-box inf" style={{ fontSize: 12, lineHeight: 1.7 }}>
+                  <b>1.</b> Google E-Tablolar'da yeni tablo aç
+                  <br />
+                  <b>2.</b> Uzantılar → Apps Script → şu kodu yapıştır:
+                  <textarea
+                    readOnly
+                    rows={8}
+                    style={{
+                      marginTop: 8,
+                      fontSize: 10,
+                      fontFamily: "var(--mono)",
+                      background: "rgba(0,0,0,.3)",
+                      border: "1px solid var(--brd)",
+                      borderRadius: "var(--r)",
+                      padding: 8,
+                      color: "var(--tx)",
+                    }}
+                    value={`const SHEET_ID = "BURAYA_SHEET_ID_YAPI\u015ATIR";\n\nfunction doPost(e) {\n  const d = JSON.parse(e.postData.contents);\n  const ss = SpreadsheetApp.openById(SHEET_ID);\n  const sh = ss.getSheetByName("Taramalar")\n    || ss.insertSheet("Taramalar");\n  if (sh.getLastRow() === 0) sh.appendRow(d.headers);\n  sh.appendRow(d.row);\n  return ContentService.createTextOutput("OK");\n}`}
+                  />
+                  <b>3.</b> Dağıt → Web uygulaması → Erişim: <b>Herkes</b>
+                  <br />
+                  <b>4.</b> Oluşan URL'yi aşağıya yapıştır
+                </div>
+                <div>
+                  <label className="lbl">Web App URL</label>
+                  <input placeholder="https://script.google.com/macros/s/..." value={gs.scriptUrl} onChange={(e) => setGs((p) => ({ ...p, scriptUrl: e.target.value }))} />
+                </div>
+                <button
+                  className="btn btn-ok btn-full"
+                  onClick={() => {
+                    if (!gs.scriptUrl) {
+                      toast("URL gerekli", "var(--err)");
+                      return;
+                    }
+                    setIntegration({ type: "gsheets", active: true, supabase: sb, gsheets: gs });
+                    toast("Google Sheets aktif edildi");
+                    setGsOpen(false);
+                  }}
+                >
+                  <Ic d={I.check} s={15} /> Aktif Et
+                </button>
+              </div>
+            )}
+          </div>
+
+          {settings.allowClearData && (
+            <>
+              <div className="section-hd">Veri</div>
+              <div className="s-card">
+                <Row icon={I.trash} label="Tüm Kayıtları Temizle" sub="Bu işlem geri alınamaz" onClick={onClearData}>
+                  <span style={{ color: "var(--err)", fontWeight: 700 }}>Temizle</span>
+                  <Ic d={I.chevR} s={14} />
+                </Row>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FIELDS PAGE
+═══════════════════════════════════════════════════════════════════════════ */
+function FieldsPage({ fields, setFields, isAdmin, settings }) {
+  if (!isAdmin)
+    return (
+      <div className="page" style={{ textAlign: "center", paddingTop: 60, color: "var(--tx3)" }}>
+        <Ic d={I.lock} s={44} />
+        <p style={{ marginTop: 14, fontWeight: 700, color: "var(--tx2)" }}>Erişim Kısıtlandı</p>
+        <p style={{ marginTop: 6, fontSize: 13 }}>Yalnızca admin kullanıcılar bu sayfaya erişebilir.</p>
+      </div>
+    );
+
+  const add = () => setFields((p) => [...p, { id: genId(), label: "Yeni Alan", type: "Metin", required: false, locked: false }]);
+  const remove = (id) => setFields((p) => p.filter((f) => f.id !== id));
+  const upd = (id, k, v) => setFields((p) => p.map((f) => (f.id === id ? { ...f, [k]: v } : f)));
+
+  return (
+    <div className="page">
+      {settings.allowAddField && (
+        <button className="btn btn-primary btn-full" style={{ marginBottom: 12 }} onClick={add}>
+          <Ic d={I.plus} s={16} /> Alan Ekle
+        </button>
+      )}
+      {fields.map((f) => (
+        <div className="field-card" key={f.id}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, marginBottom: 10 }}>
+            <input
+              value={f.label}
+              disabled={f.locked || !settings.allowEditField}
+              onChange={(e) => upd(f.id, "label", e.target.value)}
+              style={{ height: 46, fontSize: 14, fontWeight: 600 }}
+            />
+            {!f.locked && settings.allowDeleteField && (
+              <button className="btn btn-danger" style={{ height: 46, width: 46, padding: 0 }} onClick={() => remove(f.id)}>
+                <Ic d={I.del} s={15} />
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 10 }}>
+            <span className="tag">{f.id}</span>
+            {f.locked && <span className="badge badge-acc">Kilitli</span>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label className="lbl">Tip</label>
+              <select
+                value={f.type}
+                disabled={f.locked || !settings.allowEditField}
+                onChange={(e) => upd(f.id, "type", e.target.value)}
+                style={{ height: 46 }}
+              >
+                {FIELD_TYPES.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <label className="chk-row" style={{ height: 46 }}>
+                <input type="checkbox" checked={f.required} disabled={f.locked} onChange={(e) => upd(f.id, "required", e.target.checked)} />
+                <span>Zorunlu</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      ))}
+      <p style={{ fontSize: 12, color: "var(--tx3)", textAlign: "center", marginTop: 8 }}>
+        Müşteri ve Kaydeden alanları her kayda otomatik eklenir.
+      </p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROOT APP
+═══════════════════════════════════════════════════════════════════════════ */
+export default function App() {
+  const [users, setUsers] = useState(INITIAL_USERS);
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState("scan");
+  const [fields, setFields] = useState(INITIAL_FIELDS);
+  const [records, setRecords] = useState([]);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [custList, setCustList] = useState(DEFAULT_CUSTS);
+  const [settings, setSettings] = useState(INITIAL_SETTINGS);
+  const [integration, setIntegration] = useState({
+    active: false,
+    type: "supabase",
+    supabase: { url: "", key: "", table: "taramalar" },
+    gsheets: { scriptUrl: "" },
+  });
+  const { toasts, add: toast } = useToast();
+
+  const isAdmin = user?.role === "admin";
+
+  const handleSave = useCallback((r) => {
+    setRecords((p) => [r, ...p]);
+    setLastSaved(r);
+  }, []);
+  const handleDelete = (id) => {
+    setRecords((p) => p.filter((r) => r.id !== id));
+    toast("Kayıt silindi", "var(--err)");
+  };
+  const handleEdit = (r) => {
+    setRecords((p) => p.map((x) => (x.id === r.id ? r : x)));
+    toast("Güncellendi", "var(--inf)");
+  };
+  const handleClear = () => {
+    if (window.confirm("Tüm kayıtlar silinecek. Onaylıyor musunuz?")) {
+      setRecords([]);
+      setLastSaved(null);
+      toast("Tüm veriler temizlendi", "var(--err)");
+    }
+  };
+
+  const handleExport = (type) => {
+    if (!records.length) {
+      toast("Dışa aktarılacak kayıt yok", "var(--acc)");
+      return;
+    }
+    const ef = fields.filter((f) => f.id !== "barcode");
+    const hdr = ["Barkod", ...ef.map((f) => f.label), "Müşteri", "Kaydeden", "Kullanıcı Adı", "Tarih", "Saat"];
+    const data = records.map((r) => {
+      const d = new Date(r.timestamp);
+      return [
+        r.barcode,
+        ...ef.map((f) => r[f.id] ?? ""),
+        r.customer ?? "",
+        r.scanned_by ?? "",
+        r.scanned_by_username ?? "",
+        d.toLocaleDateString("tr-TR"),
+        d.toLocaleTimeString("tr-TR"),
+      ];
+    });
+    if (type === "xlsx") {
+      const ws = XLSX.utils.aoa_to_sheet([hdr, ...data]);
+      ws["!cols"] = hdr.map(() => ({ wch: 20 }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Taramalar");
+      XLSX.writeFile(wb, `scandesk_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } else {
+      const csv = [hdr, ...data]
+        .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+      const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["FEFF" + csv], { type: "text/csv;charset=utf-8" }));

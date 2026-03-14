@@ -1,0 +1,8 @@
+{
+  "appId": "com.scandesk.app",
+  "appName": "ScanDesk",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true
+  }
+}
