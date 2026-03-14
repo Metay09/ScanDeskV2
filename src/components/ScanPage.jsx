@@ -194,49 +194,6 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
 
     return { ok: true, msg: null };
   }, [shiftExpired, isAdmin, scanSettings, findExistingRec]);
-  const onBarcode = useCallback((code) => {
-    if (shiftExpired && !isAdmin) {
-      toast("Vardiya sona erdi — okutma devre dışı", "var(--err)");
-      return false;
-    }
-    const bc = normalizeCode(code);
-    doSaveCode(bc, undefined);
-    return true;
-  }, [shiftExpired, isAdmin, doSaveCode, toast]);
-  onBarcodeRef.current = onBarcode;
-
-  // Auto-save when barcode length matches expected length
-  // Uses debounce to wait for typing/scanning to finish before checking
-  const autoSaveTimer = useRef(null);
-  useEffect(() => {
-    clearTimeout(autoSaveTimer.current);
-    if (!autoSave) return;
-    if (!scanSettings.enforceBarcodeLengthMatch) return;
-    if (expectedBarcodeLength.current === null) return;
-    if (pendingBc) return;
-
-    const trimmedBarcode = barcode.trim();
-    if (!trimmedBarcode) return;
-    if (trimmedBarcode.length !== expectedBarcodeLength.current) return; // Wait silently until length matches
-
-    // Length matches - wait briefly then save
-    autoSaveTimer.current = setTimeout(() => {
-      if (addDetailAfterScan) {
-        const validation = validateBarcodeForSave(trimmedBarcode);
-        if (!validation.ok) {
-          if (validation.msg) toast(validation.msg, "var(--err)");
-          setBarcode("");
-          return;
-        }
-        setPendingBc(trimmedBarcode);
-      } else {
-        onBarcode(trimmedBarcode);
-      }
-    }, 550);
-
-    return () => clearTimeout(autoSaveTimer.current);
-  }, [barcode, autoSave, scanSettings.enforceBarcodeLengthMatch, pendingBc, addDetailAfterScan, onBarcode, validateBarcodeForSave, toast]);
-
   /* ── Save ── */
   const requiredFields = useMemo(
     () => fields.filter(f => f.id !== "barcode" && f.id !== "note" && f.required),
@@ -354,6 +311,49 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
       }
     }
   }, [customer, aciklama, extras, fields, user, onSave, onSyncUpdate, scheduleFocus, vibration, beep, integration, toast, isAdmin, adminShift, adminDate, validateBarcodeForSave, addToSyncQueue]);
+
+  const onBarcode = useCallback((code) => {
+    if (shiftExpired && !isAdmin) {
+      toast("Vardiya sona erdi — okutma devre dışı", "var(--err)");
+      return false;
+    }
+    const bc = normalizeCode(code);
+    doSaveCode(bc, undefined);
+    return true;
+  }, [shiftExpired, isAdmin, doSaveCode, toast]);
+  onBarcodeRef.current = onBarcode;
+
+  // Auto-save when barcode length matches expected length
+  // Uses debounce to wait for typing/scanning to finish before checking
+  const autoSaveTimer = useRef(null);
+  useEffect(() => {
+    clearTimeout(autoSaveTimer.current);
+    if (!autoSave) return;
+    if (!scanSettings.enforceBarcodeLengthMatch) return;
+    if (expectedBarcodeLength.current === null) return;
+    if (pendingBc) return;
+
+    const trimmedBarcode = barcode.trim();
+    if (!trimmedBarcode) return;
+    if (trimmedBarcode.length !== expectedBarcodeLength.current) return; // Wait silently until length matches
+
+    // Length matches - wait briefly then save
+    autoSaveTimer.current = setTimeout(() => {
+      if (addDetailAfterScan) {
+        const validation = validateBarcodeForSave(trimmedBarcode);
+        if (!validation.ok) {
+          if (validation.msg) toast(validation.msg, "var(--err)");
+          setBarcode("");
+          return;
+        }
+        setPendingBc(trimmedBarcode);
+      } else {
+        onBarcode(trimmedBarcode);
+      }
+    }, 550);
+
+    return () => clearTimeout(autoSaveTimer.current);
+  }, [barcode, autoSave, scanSettings.enforceBarcodeLengthMatch, pendingBc, addDetailAfterScan, onBarcode, validateBarcodeForSave, toast]);
 
   const doSave = useCallback(() => {
     if (pendingBc) doSaveCode(pendingBc, extras);
