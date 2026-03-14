@@ -7,7 +7,7 @@ import { genId } from "../constants";
 import { toggleSetMember, deriveShiftDate, getShiftDate } from "../utils";
 import { getDynamicFieldValue, FIXED_FIELDS } from "../services/recordModel";
 
-export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, settings, toast, isAdmin, currentShift, user, integration, onSyncUpdate }) {
+export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, aciklamalar, settings, toast, isAdmin, currentShift, user, integration, onSyncUpdate }) {
   const [q, setQ]           = useState("");
   const [grouped, setGrouped] = useState(true);
   const [editRec, setEditRec] = useState(null);
@@ -349,7 +349,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
         </div>
       }
 
-      {editRec && <EditRecordModal record={editRec} fields={fields} customers={customers} canManageCustomers={true}
+      {editRec && <EditRecordModal record={editRec} fields={fields} customers={customers} aciklamalar={aciklamalar} canManageCustomers={true}
         onSave={r => { onEdit(r); setEditRec(null); }} onClose={() => setEditRec(null)} />}
 
       {pendingImport && (

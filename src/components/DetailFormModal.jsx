@@ -3,8 +3,9 @@ import { Ic, I } from "./Icon";
 import Modal from "./Modal";
 import FieldInput from "./FieldInput";
 import CustomerPicker from "./CustomerPicker";
+import AciklamaPicker from "./AciklamaPicker";
 
-export default function DetailFormModal({ barcode, fields, extras, onExtrasChange, customer, onCustomerChange, aciklama, onAciklamaChange, customerList, onCustomerAdd, onCustomerRemove, canManageCustomers, onSave, onClose, onError }) {
+export default function DetailFormModal({ barcode, fields, extras, onExtrasChange, customer, onCustomerChange, aciklama, onAciklamaChange, customerList, onCustomerAdd, onCustomerRemove, canManageCustomers, aciklamaList, onAciklamaAdd, onAciklamaRemove, onSave, onClose, onError }) {
   const firstFieldRef = useRef(null);
 
   // Auto-focus first field when modal opens
@@ -92,25 +93,15 @@ export default function DetailFormModal({ barcode, fields, extras, onExtrasChang
           />
         </div>
       )}
-      {/* Açıklama field (styled like customer) */}
-      <div style={{ width: "100%" }}>
-        <label className="lbl" style={{ marginBottom: 4, fontSize: 12 }}>Açıklama</label>
-        <input
-          type="text"
+      <div>
+        <AciklamaPicker
+          label="Açıklama"
+          aciklamalar={aciklamaList || []}
           value={aciklama || ""}
-          onChange={(e) => onAciklamaChange(e.target.value)}
-          placeholder="Açıklama girin..."
-          style={{
-            width: "100%",
-            height: 40,
-            borderRadius: 10,
-            padding: "0 12px",
-            background: "var(--s2)",
-            color: "var(--tx)",
-            border: "1.5px solid var(--brd)",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
+          onChange={onAciklamaChange}
+          canManage={true}
+          onAdd={onAciklamaAdd}
+          onRemove={onAciklamaRemove}
         />
       </div>
     </Modal>

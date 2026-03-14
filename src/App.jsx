@@ -5,7 +5,7 @@ import { App as CapApp } from "@capacitor/app";
 import * as XLSX from "xlsx";
 
 import "./index.css";
-import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL } from "./constants";
+import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
@@ -31,7 +31,8 @@ export default function App() {
   const [fields, setFields]       = useState(INITIAL_FIELDS);
   const [records, setRecords]     = useState([]);
   const [lastSaved, setLastSaved] = useState(null);
-  const [custList, setCustList]   = useState(DEFAULT_CUSTS);
+  const [custList, setCustList]         = useState(DEFAULT_CUSTS);
+  const [aciklamaList, setAciklamaList] = useState(DEFAULT_ACIKLAMAS);
   const [settings, setSettings]   = useState(INITIAL_SETTINGS);
   const [integration, setIntegration] = useState({
     active: false, type: "postgres_api",
@@ -110,6 +111,10 @@ export default function App() {
 
       if (Array.isArray(st?.custList) && st.custList.length) {
         setCustList(st.custList);
+      }
+
+      if (Array.isArray(st?.aciklamaList)) {
+        setAciklamaList(st.aciklamaList);
       }
 
       if (st?.settings) {
@@ -213,8 +218,8 @@ export default function App() {
       loginShift: userLoginShift,
       loginAt: new Date().toISOString()
     } : null;
-    saveState({ users, fields, records, lastSaved, custList, settings, integration, shiftTakeovers, activeSession, syncQueue, theme });
-  }, [hydrated, users, fields, records, lastSaved, custList, settings, integration, shiftTakeovers, user, userLoginShift, syncQueue, theme]);
+    saveState({ users, fields, records, lastSaved, custList, aciklamaList, settings, integration, shiftTakeovers, activeSession, syncQueue, theme });
+  }, [hydrated, users, fields, records, lastSaved, custList, aciklamaList, settings, integration, shiftTakeovers, user, userLoginShift, syncQueue, theme]);
 
   const { toasts, add: toast } = useToast();
 
@@ -780,6 +785,12 @@ export default function App() {
     remove: name => setCustList(p => p.filter(c => c !== name)),
   };
 
+  const aciklamalar = {
+    list: aciklamaList,
+    add:    name => { if (!aciklamaList.includes(name)) setAciklamaList(p => [...p, name]); },
+    remove: name => setAciklamaList(p => p.filter(a => a !== name)),
+  };
+
   const NAV = [
     { id: "scan",     label: "Tara",      icon: I.scan },
     { id: "data",     label: "Veriler",   icon: I.data },
@@ -946,8 +957,8 @@ export default function App() {
 
       {/* CONTENT */}
       <div className="scroll-area">
-        {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} isAdmin={isAdmin} user={user} integration={integration} scanSettings={settings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
-        {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} settings={settings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} integration={integration} onSyncUpdate={handleSyncUpdate} />}
+        {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={settings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
+        {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={settings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} integration={integration} onSyncUpdate={handleSyncUpdate} />}
         {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} />}
         {page === "fields"   && <FieldsPage   fields={fields} setFields={setFields} isAdmin={isAdmin} settings={settings} />}
         {page === "users"    && isAdmin && <UsersPage users={users} setUsers={setUsers} currentUser={user} toast={toast} />}

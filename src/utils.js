@@ -133,3 +133,8 @@ export function bytesToHex(bytes) {
 export function getCustomerList(customers) {
   return Array.isArray(customers) ? customers : (customers?.list || []);
 }
+
+// Safely extract aciklama list from aciklamalar prop
+export function getAciklamaList(aciklamalar) {
+  return Array.isArray(aciklamalar) ? aciklamalar : (aciklamalar?.list || []);
+}
