@@ -5,7 +5,7 @@ import { App as CapApp } from "@capacitor/app";
 import * as XLSX from "xlsx";
 
 import "./index.css";
-import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS } from "./constants";
+import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
@@ -22,6 +22,8 @@ import FieldsPage from "./components/FieldsPage";
 import UsersPage from "./components/UsersPage";
 import SettingsPage from "./components/SettingsPage";
 
+const GRACE_PERIOD_SECS = 300; // 5 dakika
+
 export default function App() {
   const [users, setUsers]         = useState(INITIAL_USERS);
   const [user, setUser]           = useState(null);
@@ -33,11 +35,8 @@ export default function App() {
   const [settings, setSettings]   = useState(INITIAL_SETTINGS);
   const [integration, setIntegration] = useState({
     active: false, type: "postgres_api",
-    postgresApi: {
-      serverUrl: "https://scandesk-api.simsekhome.site",
-      apiKey: "scandesk_live_7f9c2d1a8b4e6f0c9a2d5e7b1c3f8a6d"
-    },
-    gsheets:  { scriptUrl: "https://script.google.com/macros/s/AKfycbywRIk85STTKY9oF9H7fu186t1WqAr26qTc_vM2w7kXd_Iq4oYpn7yu3LmPaUOHOqQj/exec" },
+    postgresApi: { serverUrl: DEFAULT_POSTGRES_URL, apiKey: DEFAULT_POSTGRES_KEY },
+    gsheets:     { scriptUrl: DEFAULT_GSHEETS_URL },
   });
   const [hydrated, setHydrated] = useState(false);
   const [theme, setTheme] = useState("dark");
@@ -125,38 +124,24 @@ export default function App() {
             ...st.integration,
             type: "postgres_api",
             postgresApi: {
-              serverUrl: st.integration.supabase.url || "https://scandesk-api.simsekhome.site",
-              apiKey: st.integration.supabase.key || "scandesk_live_7f9c2d1a8b4e6f0c9a2d5e7b1c3f8a6d"
+              serverUrl: st.integration.supabase.url || DEFAULT_POSTGRES_URL,
+              apiKey: st.integration.supabase.key || DEFAULT_POSTGRES_KEY
             },
-            // Keep old supabase config for reference but it won't be used
             supabase: undefined
           };
         }
-        // Ensure postgresApi field exists with defaults
+        // postgresApi alanı yoksa varsayılan oluştur
         if (!migratedIntegration.postgresApi) {
-          migratedIntegration.postgresApi = {
-            serverUrl: "https://scandesk-api.simsekhome.site",
-            apiKey: "scandesk_live_7f9c2d1a8b4e6f0c9a2d5e7b1c3f8a6d"
-          };
+          migratedIntegration.postgresApi = { serverUrl: DEFAULT_POSTGRES_URL, apiKey: DEFAULT_POSTGRES_KEY };
         } else {
-          // Fill in defaults for empty fields (first-time setup), but preserve user values
-          if (!migratedIntegration.postgresApi.serverUrl) {
-            migratedIntegration.postgresApi.serverUrl = "https://scandesk-api.simsekhome.site";
-          }
-          if (!migratedIntegration.postgresApi.apiKey) {
-            migratedIntegration.postgresApi.apiKey = "scandesk_live_7f9c2d1a8b4e6f0c9a2d5e7b1c3f8a6d";
-          }
+          if (!migratedIntegration.postgresApi.serverUrl) migratedIntegration.postgresApi.serverUrl = DEFAULT_POSTGRES_URL;
+          if (!migratedIntegration.postgresApi.apiKey)    migratedIntegration.postgresApi.apiKey    = DEFAULT_POSTGRES_KEY;
         }
-        // Ensure gsheets field exists with defaults
+        // gsheets alanı yoksa varsayılan oluştur
         if (!migratedIntegration.gsheets) {
-          migratedIntegration.gsheets = {
-            scriptUrl: "https://script.google.com/macros/s/AKfycbywRIk85STTKY9oF9H7fu186t1WqAr26qTc_vM2w7kXd_Iq4oYpn7yu3LmPaUOHOqQj/exec"
-          };
+          migratedIntegration.gsheets = { scriptUrl: DEFAULT_GSHEETS_URL };
         } else {
-          // Fill in default Google Sheets URL if empty
-          if (!migratedIntegration.gsheets.scriptUrl) {
-            migratedIntegration.gsheets.scriptUrl = "https://script.google.com/macros/s/AKfycbywRIk85STTKY9oF9H7fu186t1WqAr26qTc_vM2w7kXd_Iq4oYpn7yu3LmPaUOHOqQj/exec";
-          }
+          if (!migratedIntegration.gsheets.scriptUrl) migratedIntegration.gsheets.scriptUrl = DEFAULT_GSHEETS_URL;
         }
         setIntegration(migratedIntegration);
       }
@@ -323,8 +308,6 @@ export default function App() {
       setUserLoginShift(null);
     }
   }, []);
-
-  const GRACE_PERIOD_SECS = 300; // 5 dakika
 
   // Vardiya bitimi algılama — sadece normal kullanıcılar için
   useEffect(() => {
@@ -570,8 +553,18 @@ export default function App() {
   };
 
   const handleDeleteRange = (startLocal, endLocal) => {
-    const a = new Date(startLocal).toISOString();
-    const b = new Date(endLocal).toISOString();
+    const startDate = new Date(startLocal);
+    const endDate   = new Date(endLocal);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      toast("Geçersiz tarih aralığı", "var(--err)");
+      return;
+    }
+    if (startDate > endDate) {
+      toast("Başlangıç tarihi, bitiş tarihinden sonra olamaz", "var(--err)");
+      return;
+    }
+    const a = startDate.toISOString();
+    const b = endDate.toISOString();
 
     // Find records to delete before filtering
     const recordsToDelete = records.filter(r => r.timestamp >= a && r.timestamp <= b);
@@ -878,7 +871,7 @@ export default function App() {
           <Ic d={theme === "dark" ? I.sun : I.moon} s={16} />
         </button>
         <div className="user-pill">
-          <div className="avatar" style={{ width: 26, height: 26, fontSize: 11 }}>{user.name[0]}</div>
+          <div className="avatar" style={{ width: 26, height: 26, fontSize: 11 }}>{(user.name || user.username || "?")[0]}</div>
           <span style={{ fontSize: 12, fontWeight: 600 }}>{user.name}</span>
           {isAdmin && <span className="badge badge-acc">ADM</span>}
         </div>
@@ -942,7 +935,7 @@ export default function App() {
         ))}
         <div className="side-footer">
           <div className="user-pill" style={{ borderRadius: "var(--r)", gap: 8 }}>
-            <div className="avatar" style={{ width: 30, height: 30 }}>{user.name[0]}</div>
+            <div className="avatar" style={{ width: 30, height: 30 }}>{(user.name || user.username || "?")[0]}</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700 }}>{user.name}</div>
               <div style={{ fontSize: 10, color: "var(--tx2)" }}>@{user.username} · {isAdmin ? "Admin" : "Kullanıcı"}</div>

@@ -6,7 +6,6 @@ import Modal from "./Modal";
 import { genId } from "../constants";
 import { toggleSetMember, deriveShiftDate, getShiftDate } from "../utils";
 import { getDynamicFieldValue, FIXED_FIELDS } from "../services/recordModel";
-import { syncRecordToSheets } from "../services/integrations";
 
 export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, settings, toast, isAdmin, currentShift, user, integration, onSyncUpdate }) {
   const [q, setQ]           = useState("");

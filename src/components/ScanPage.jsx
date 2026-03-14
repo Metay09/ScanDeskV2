@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Ic, I } from "./Icon";
 import { genId } from "../constants";
 import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getShiftDate, deriveShiftDate } from "../utils";
@@ -142,7 +142,10 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     }, 120);
   }, []);
 
-  useEffect(() => { scheduleFocus(); }, [scheduleFocus]);
+  useEffect(() => {
+    scheduleFocus();
+    return () => clearTimeout(focusTimer.current);
+  }, [scheduleFocus]);
 
   const handleCustomerSelect = (val) => {
     setCustomer(normalizeCustomer(val));
@@ -189,7 +192,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
 
     return { ok: true, msg: null };
   }, [shiftExpired, isAdmin, scanSettings, findExistingRec]);
-  const onBarcode = (code) => {
+  const onBarcode = useCallback((code) => {
     if (shiftExpired && !isAdmin) {
       toast("Vardiya sona erdi — okutma devre dışı", "var(--err)");
       return false;
@@ -197,7 +200,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     const bc = normalizeCode(code);
     doSaveCode(bc, undefined);
     return true;
-  };
+  }, [shiftExpired, isAdmin, doSaveCode, toast]);
   onBarcodeRef.current = onBarcode;
 
   // Auto-save when barcode length matches expected length
@@ -233,7 +236,10 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
   }, [barcode, autoSave, scanSettings.enforceBarcodeLengthMatch, pendingBc, addDetailAfterScan, onBarcode, validateBarcodeForSave, toast]);
 
   /* ── Save ── */
-  const requiredFields = fields.filter(f => f.id !== "barcode" && f.id !== "note" && f.required);
+  const requiredFields = useMemo(
+    () => fields.filter(f => f.id !== "barcode" && f.id !== "note" && f.required),
+    [fields]
+  );
 
   const doSaveCode = useCallback((code, extrasOverride) => {
     const bc = (code || "").trim();
@@ -268,10 +274,12 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
 
     // Admin farklı tarih seçtiyse, timestamp'i o tarihe göre oluştur
     let recordTimestamp = now.toISOString();
-    if (isAdmin && adminDate !== fmtDate()) {
+    if (isAdmin && adminDate && adminDate !== fmtDate()) {
       const [y, m, d] = adminDate.split("-").map(Number);
       const adjusted = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-      recordTimestamp = adjusted.toISOString();
+      if (!isNaN(adjusted.getTime())) {
+        recordTimestamp = adjusted.toISOString();
+      }
     }
 
     // Create customFields object for dynamic fields
@@ -680,6 +688,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
           canManageCustomers={true}
           onSave={doSave}
           onClose={() => { setPendingBc(null); setBarcode(""); scheduleFocus(); }}
+          onError={toast}
         />
       )}
     </div>
