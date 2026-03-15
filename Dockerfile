@@ -4,6 +4,14 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+
+# Build-time env injection: VITE_ değişkenleri React bundle'ına gömülür.
+# docker-compose.yml bu ARG'ları .env'den iletir.
+ARG VITE_SERVER_URL=""
+ARG VITE_API_KEY=""
+ENV VITE_SERVER_URL=$VITE_SERVER_URL
+ENV VITE_API_KEY=$VITE_API_KEY
+
 RUN npm run build
 
 # ── Stage 2: Production image ─────────────────────────────────────────────────

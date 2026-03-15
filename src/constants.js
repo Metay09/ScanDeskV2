@@ -21,11 +21,15 @@ export const INITIAL_USERS = [
   },
 ];
 
-// Entegrasyon için varsayılan değerler — kullanıcı Ayarlar'dan doldurur
-// Kaynak kodda gerçek URL/key bırakmayın; kurulum sonrası Ayarlar ekranından girin.
-export const DEFAULT_POSTGRES_URL = "";
-export const DEFAULT_POSTGRES_KEY = "";
+// Entegrasyon için varsayılan değerler.
+// VITE_SERVER_URL / VITE_API_KEY build sırasında .env'den gömülür;
+// tanımlıysa uygulama ilk açılışta PostgreSQL entegrasyonunu otomatik aktif eder.
+export const DEFAULT_POSTGRES_URL = import.meta.env.VITE_SERVER_URL || "";
+export const DEFAULT_POSTGRES_KEY = import.meta.env.VITE_API_KEY || "";
 export const DEFAULT_GSHEETS_URL  = "";
+// Her iki değer de tanımlıysa entegrasyonu başlangıçta aktif aç
+export const DEFAULT_INTEGRATION_ACTIVE =
+  !!(import.meta.env.VITE_SERVER_URL && import.meta.env.VITE_API_KEY);
 
 // Admin (global) ayarlar — sadece admin değiştirebilir, tüm cihazlara uygulanır
 export const INITIAL_SETTINGS = {
