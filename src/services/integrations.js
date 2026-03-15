@@ -47,6 +47,15 @@ export async function pushServerConfig(cfg, data) {
   if (!r.ok) throw new Error(`pushServerConfig ${r.status}`);
 }
 
+/** Sunucudaki tüm barkod kayıtlarını çeker. */
+export async function fetchServerRecords(cfg, limit = 5000) {
+  const r = await fetch(`${base(cfg)}/api/taramalar?limit=${limit}`, {
+    headers: { "x-api-key": cfg.apiKey },
+  });
+  if (!r.ok) throw new Error(`fetchServerRecords ${r.status}`);
+  return r.json();
+}
+
 // ─── PostgreSQL Kayıt CRUD ───────────────────────────────────────────────────
 
 export async function postgresApiInsert(cfg, row) {

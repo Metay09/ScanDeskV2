@@ -8,8 +8,8 @@ import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig } from "./services/integrations";
-import { toDbPayload } from "./services/recordModel";
+import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords } from "./services/integrations";
+import { toDbPayload, fromDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
 import { useBackButton } from "./hooks/useBackButton";
 import { useShiftTimer } from "./hooks/useShiftTimer";
@@ -233,9 +233,10 @@ export default function App() {
       // Sunucu ulaşılamaz ya da endpoint henüz yoksa sessizce local data ile devam edilir.
       if (finalIntegration?.active && finalIntegration.type === "postgres_api" && finalIntegration.postgresApi) {
         try {
-          const [serverUsers, serverConfig] = await Promise.allSettled([
+          const [serverUsers, serverConfig, serverRecords] = await Promise.allSettled([
             fetchServerUsers(finalIntegration.postgresApi),
             fetchServerConfig(finalIntegration.postgresApi),
+            fetchServerRecords(finalIntegration.postgresApi),
           ]);
 
           if (serverUsers.status === "fulfilled" && Array.isArray(serverUsers.value) && serverUsers.value.length) {
@@ -250,6 +251,11 @@ export default function App() {
             if (Array.isArray(sc.custList) && sc.custList.length)   setCustList(sc.custList);
             if (Array.isArray(sc.aciklamaList))                     setAciklamaList(sc.aciklamaList);
             if (sc.settings)                                        setSettings(sc.settings);
+          }
+
+          if (serverRecords.status === "fulfilled" && Array.isArray(serverRecords.value)) {
+            const appRecords = serverRecords.value.map(r => fromDbPayload(r));
+            setRecords(normalizeLoadedRecords(appRecords, loadedFields));
           }
         } catch {
           // Sunucuya ulaşılamadı — local data ile devam
@@ -322,12 +328,33 @@ export default function App() {
 
   useEffect(() => { handleLogoutRef.current = handleLogout; }, [handleLogout]);
 
-  const handleLogin = useCallback((u) => {
+  const handleLogin = useCallback(async (u) => {
     resetGrace();
     setUser(u);
     setPage("scan");
     setLogoutReason(null);
     setUserLoginShift(u.role !== "admin" ? getCurrentShift() : null);
+
+    // Giriş yapınca sunucudan en güncel kayıtları çek
+    const int = integrationRef.current;
+    if (int.active && int.type === "postgres_api") {
+      try {
+        const serverRecs = await fetchServerRecords(int.postgresApi);
+        if (Array.isArray(serverRecs)) {
+          const appRecords = serverRecs.map(r => fromDbPayload(r));
+          setRecords(p => {
+            const normalized = appRecords.map(r => {
+              const n = normalizeRecord(r, fieldsRef.current);
+              const sd = deriveShiftDate(n);
+              return sd ? { ...n, shiftDate: sd } : n;
+            });
+            return normalized;
+          });
+        }
+      } catch {
+        // Sunucuya ulaşılamadı — mevcut local data ile devam
+      }
+    }
   }, [resetGrace]);
 
   // Sync queue
