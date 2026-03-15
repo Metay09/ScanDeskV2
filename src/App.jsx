@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { App as CapApp } from "@capacitor/app";
@@ -227,6 +227,16 @@ export default function App() {
 
   const retryableCount = useMemo(() => getRetryableItems(syncQueue).length, [syncQueue]);
 
+  // Scroll pozisyonunu düzenleme sonrası korumak için
+  const scrollAreaRef = useRef(null);
+  const scrollPosRef  = useRef(null);
+  useLayoutEffect(() => {
+    if (scrollPosRef.current !== null && scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollPosRef.current;
+      scrollPosRef.current = null;
+    }
+  }, [records]);
+
   // Refs for back button handler — page ve showExitConfirm her render'da güncellenir
   const pageRef = useRef(page);
   const showExitConfirmRef = useRef(showExitConfirm);
@@ -411,6 +421,7 @@ export default function App() {
     }
   }, [records, integration, toast, addToSyncQueue]);
   const handleEdit = useCallback((r) => {
+    scrollPosRef.current = scrollAreaRef.current?.scrollTop ?? null;
     const normalized = normalizeRecord(r, fields);
     const rec = addShiftDate(normalized);
     rec.updatedAt = new Date().toISOString();
@@ -956,7 +967,7 @@ export default function App() {
       </div>
 
       {/* CONTENT */}
-      <div className="scroll-area">
+      <div className="scroll-area" ref={scrollAreaRef}>
         {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={settings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
         {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={settings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} integration={integration} onSyncUpdate={handleSyncUpdate} />}
         {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} />}
