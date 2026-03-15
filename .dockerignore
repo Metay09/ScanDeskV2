@@ -1,0 +1,7 @@
+node_modules
+android
+dist
+.git
+.env
+*.md
+docs/
