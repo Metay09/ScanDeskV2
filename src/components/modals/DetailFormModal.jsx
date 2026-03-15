@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { Ic, I } from "./Icon";
-import Modal from "./Modal";
-import FieldInput from "./FieldInput";
-import CustomerPicker from "./CustomerPicker";
-import AciklamaPicker from "./AciklamaPicker";
+import { Ic, I } from "../ui/Icon";
+import Modal from "../ui/Modal";
+import FieldInput from "../shared/FieldInput";
+import CustomerPicker from "../shared/CustomerPicker";
+import AciklamaPicker from "../shared/AciklamaPicker";
 
 export default function DetailFormModal({ barcode, fields, extras, onExtrasChange, customer, onCustomerChange, aciklama, onAciklamaChange, customerList, onCustomerAdd, onCustomerRemove, canManageCustomers, aciklamaList, onAciklamaAdd, onAciklamaRemove, onSave, onClose, onError }) {
   const firstFieldRef = useRef(null);

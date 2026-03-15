@@ -1,11 +1,11 @@
-import { Ic, I } from "./Icon";
-import Modal from "./Modal";
-import FieldInput from "./FieldInput";
-import CustomerPicker from "./CustomerPicker";
-import AciklamaPicker from "./AciklamaPicker";
-import { useFormState } from "../hooks/useFormState";
-import { getCustomerList, getAciklamaList } from "../utils";
-import { getDynamicFieldValue, setDynamicFieldValue } from "../services/recordModel";
+import { Ic, I } from "../ui/Icon";
+import Modal from "../ui/Modal";
+import FieldInput from "../shared/FieldInput";
+import CustomerPicker from "../shared/CustomerPicker";
+import AciklamaPicker from "../shared/AciklamaPicker";
+import { useFormState } from "../../hooks/useFormState";
+import { getCustomerList, getAciklamaList } from "../../utils";
+import { getDynamicFieldValue, setDynamicFieldValue } from "../../services/recordModel";
 
 export default function EditRecordModal({ record, fields, customers, aciklamalar, onSave, onClose, canManageCustomers = false }) {
   const [form, set] = useFormState({ ...record });

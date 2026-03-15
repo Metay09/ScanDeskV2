@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Ic, I } from "./Icon";
-import { genId } from "../constants";
-import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../utils";
-import { postgresApiInsert, sheetsInsert, syncRecordToSheets } from "../services/integrations";
-import { toDbPayload } from "../services/recordModel";
-import EditRecordModal from "./EditRecordModal";
-import CustomerPicker from "./CustomerPicker";
-import AciklamaPicker from "./AciklamaPicker";
-import ShiftInheritModal from "./ShiftInheritModal";
-import ShiftTakeoverPrompt from "./ShiftTakeoverPrompt";
-import FieldInput from "./FieldInput";
-import DetailFormModal from "./DetailFormModal";
+import { Ic, I } from "../ui/Icon";
+import { genId } from "../../constants";
+import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../../utils";
+import { postgresApiInsert, sheetsInsert, syncRecordToSheets } from "../../services/integrations";
+import { toDbPayload } from "../../services/recordModel";
+import EditRecordModal from "../modals/EditRecordModal";
+import CustomerPicker from "../shared/CustomerPicker";
+import AciklamaPicker from "../shared/AciklamaPicker";
+import ShiftInheritModal from "../modals/ShiftInheritModal";
+import ShiftTakeoverPrompt from "../modals/ShiftTakeoverPrompt";
+import FieldInput from "../shared/FieldInput";
+import DetailFormModal from "../modals/DetailFormModal";
 
 export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, aciklamalar, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue }) {
   const customerList = getCustomerList(customers);

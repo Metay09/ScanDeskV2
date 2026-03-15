@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
-import { Ic, I } from "./Icon";
-import EditRecordModal from "./EditRecordModal";
-import Modal from "./Modal";
-import { genId } from "../constants";
-import { toggleSetMember, deriveShiftDate, getShiftDate } from "../utils";
-import { getDynamicFieldValue, FIXED_FIELDS } from "../services/recordModel";
+import { Ic, I } from "../ui/Icon";
+import EditRecordModal from "../modals/EditRecordModal";
+import Modal from "../ui/Modal";
+import { genId } from "../../constants";
+import { toggleSetMember, deriveShiftDate, getShiftDate } from "../../utils";
+import { getDynamicFieldValue, FIXED_FIELDS } from "../../services/recordModel";
 
 export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, aciklamalar, settings, toast, isAdmin, currentShift, user, integration, onSyncUpdate }) {
   const [q, setQ]           = useState("");

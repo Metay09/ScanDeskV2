@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Ic, I } from "./Icon";
-import { genId } from "../constants";
-import PasswordInput from "./PasswordInput";
-import { hashPassword, verifyPassword } from "../utils";
+import { Ic, I } from "../ui/Icon";
+import { genId } from "../../constants";
+import PasswordInput from "../ui/PasswordInput";
+import { hashPassword, verifyPassword } from "../../utils";
 
 export default function UsersPage({ users, setUsers, currentUser, toast }) {
   const [modal, setModal] = useState(null);

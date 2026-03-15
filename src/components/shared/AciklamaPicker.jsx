@@ -1,10 +1,10 @@
 import { useState } from "react";
-import CustomerModal from "./CustomerModal";
-import { Ic, I } from "./Icon";
+import AciklamaModal from "../modals/AciklamaModal";
+import { Ic, I } from "../ui/Icon";
 
-export default function CustomerPicker({
-  label = "Müşteri",
-  customers = [],
+export default function AciklamaPicker({
+  label = "Açıklama",
+  aciklamalar = [],
   value = "",
   onChange,
   onClose,
@@ -47,20 +47,20 @@ export default function CustomerPicker({
           gap: 8,
           cursor: "pointer"
         }}
-        title="Müşteri seç"
+        title="Açıklama seç"
       >
         <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <Ic d={I.group} s={14} />
+          <Ic d={I.edit} s={14} />
           <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: value ? "var(--tx)" : "var(--tx3)" }}>
-            {value ? display : "Müşteri seç"}
+            {value ? display : "Açıklama seç"}
           </span>
         </span>
         <Ic d={I.chevD} s={15} />
       </button>
       {open && (
-        <CustomerModal
-          customers={customers}
-          selectedCustomer={value || ""}
+        <AciklamaModal
+          aciklamalar={aciklamalar}
+          selectedAciklama={value || ""}
           onSelect={handleSelect}
           onClose={handleClose}
           canManage={canManage}
