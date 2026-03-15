@@ -1,6 +1,6 @@
 # ScanDesk — Teknik Durum Raporu
 
-**Son güncelleme:** 2026-03-14
+**Son güncelleme:** 2026-03-15
 **Proje:** ScanDesk
 **Durum:** Aktif geliştirme
 
@@ -158,6 +158,13 @@ Tablo adı: `taramalar`. Detaylar için `POSTGRESQL_SCHEMA.md`.
 |---|------|---------|
 | 1 | `handleEdit` Sheets sütun sırası `syncRecordToSheets` ile birleştirilmeli | Orta |
 | 2 | `sheetsDeleteBulk` sıralı çalışıyor; Apps Script toplu silme desteklerse paralel yapılabilir | Düşük |
-| 3 | `handleDelete` ve `handleEdit` `useCallback` ile sarılmamış | Düşük |
-| 4 | Back button listener her `page` değişiminde yeniden kaydoluyor | Düşük |
-| 5 | Tema `localStorage`'a direkt yazılıyor; diğer state Capacitor Preferences üzerinden gidiyor | Düşük |
+| 3 | Back button listener her `page` değişiminde yeniden kaydoluyor | Düşük |
+| 4 | Tema `localStorage`'a direkt yazılıyor; diğer state Capacitor Preferences üzerinden gidiyor | Düşük |
+
+## G. KAPANAN / ÇÖZÜLEN KONULAR
+
+| Konu | Çözüm |
+|------|-------|
+| `handleDelete` ve `handleEdit` `useCallback` ile sarılmamış | Her ikisi de `useCallback` ile sarıldı |
+| Veriler/Son Okutmalar sayfasında düzenleme sonrası scroll en üste gidiyordu | `scroll-area` ref + `useLayoutEffect` ile edit öncesi scroll pozisyonu kaydedilip render sonrası geri yükleniyor |
+| `src/components/` altındaki tüm bileşenler tek düzey yığılıydı | `pages/`, `modals/`, `ui/`, `shared/` alt klasörleriyle yeniden yapılandırıldı |
