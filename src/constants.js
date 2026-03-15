@@ -2,10 +2,11 @@ export const INITIAL_USERS = [
   { id: "u0", username: "admin", password: "admin123", role: "admin", name: "Admin", active: true },
 ];
 
-// Entegrasyon için varsayılan değerler — kullanıcı Ayarlar'dan değiştirir
-export const DEFAULT_POSTGRES_URL = "https://scandesk-api.simsekhome.site";
-export const DEFAULT_POSTGRES_KEY = "scandesk_live_7f9c2d1a8b4e6f0c9a2d5e7b1c3f8a6d";
-export const DEFAULT_GSHEETS_URL  = "https://script.google.com/macros/s/AKfycbywRIk85STTKY9oF9H7fu186t1WqAr26qTc_vM2w7kXd_Iq4oYpn7yu3LmPaUOHOqQj/exec";
+// Entegrasyon için varsayılan değerler — kullanıcı Ayarlar'dan doldurur
+// Kaynak kodda gerçek URL/key bırakmayın; kurulum sonrası Ayarlar ekranından girin.
+export const DEFAULT_POSTGRES_URL = "";
+export const DEFAULT_POSTGRES_KEY = "";
+export const DEFAULT_GSHEETS_URL  = "";
 
 export const INITIAL_SETTINGS = {
   autoSave: true,
