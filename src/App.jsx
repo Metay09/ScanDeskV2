@@ -1,7 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import { App as CapApp } from "@capacitor/app";
 import * as XLSX from "xlsx";
 
 import "./index.css";
@@ -9,10 +8,12 @@ import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, sheetsDeleteBulk, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig } from "./services/integrations";
-import { createQueueItem, addToQueue, removeFromQueue, getRetryableItems, markAsProcessing, markAsFailed } from "./services/syncQueue";
+import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig } from "./services/integrations";
 import { toDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
+import { useBackButton } from "./hooks/useBackButton";
+import { useShiftTimer } from "./hooks/useShiftTimer";
+import { useSyncQueue } from "./hooks/useSyncQueue";
 import { Ic, I } from "./components/ui/Icon";
 import Login from "./components/pages/Login";
 import ScanPage from "./components/pages/ScanPage";
@@ -21,8 +22,6 @@ import ReportPage from "./components/pages/ReportPage";
 import FieldsPage from "./components/pages/FieldsPage";
 import UsersPage from "./components/pages/UsersPage";
 import SettingsPage from "./components/pages/SettingsPage";
-
-const GRACE_PERIOD_SECS = 300; // 5 dakika
 
 export default function App() {
   const [users, setUsers]         = useState(INITIAL_USERS);
@@ -42,16 +41,9 @@ export default function App() {
   const [hydrated, setHydrated] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [userLoginShift, setUserLoginShift] = useState(null);
-  const [graceSecsLeft, setGraceSecsLeft] = useState(null);
-  const [graceEndTime, setGraceEndTime] = useState(null); // Absolute timestamp when grace period ends
-  const inGraceRef = useRef(false);
   const [shiftTakeovers, setShiftTakeovers] = useState({});
   const [logoutReason, setLogoutReason] = useState(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [syncQueue, setSyncQueue] = useState([]);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const backPressCountRef = useRef(0);
-  const backPressTimerRef = useRef(null);
 
   // Refs for current config values — sunucu push'unda her zaman güncel değeri yakalar
   const fieldsRef       = useRef(fields);
@@ -225,10 +217,7 @@ export default function App() {
             setPage("scan");
             // Grace period'daysa kaldığı yerden devam ettir
             if (restoredGraceEndTime) {
-              setGraceEndTime(restoredGraceEndTime);
-              const secsLeft = Math.max(0, Math.floor((restoredGraceEndTime - Date.now()) / 1000));
-              setGraceSecsLeft(secsLeft);
-              inGraceRef.current = true;
+              startGrace(restoredGraceEndTime);
             }
           } else {
             setLogoutReason("shift_expired");
@@ -292,8 +281,6 @@ export default function App() {
 
   const isAdmin = user?.role === "admin";
 
-  const retryableCount = useMemo(() => getRetryableItems(syncQueue).length, [syncQueue]);
-
   // Scroll pozisyonunu düzenleme sonrası korumak için
   const scrollAreaRef = useRef(null);
   const scrollPosRef  = useRef(null);
@@ -304,57 +291,9 @@ export default function App() {
     }
   }, [records]);
 
-  // Refs for back button handler — page ve showExitConfirm her render'da güncellenir
-  const pageRef = useRef(page);
-  const showExitConfirmRef = useRef(showExitConfirm);
-  useEffect(() => { pageRef.current = page; }, [page]);
-  useEffect(() => { showExitConfirmRef.current = showExitConfirm; }, [showExitConfirm]);
-
-  // Back button handler — listener bir kez kaydedilir, page/showExitConfirm ref üzerinden okunur
-  useEffect(() => {
-    let listener;
-
-    const handleBackButton = () => {
-      if (backPressTimerRef.current) clearTimeout(backPressTimerRef.current);
-
-      backPressCountRef.current += 1;
-      const pressCount = backPressCountRef.current;
-
-      backPressTimerRef.current = setTimeout(() => {
-        backPressCountRef.current = 0;
-        setShowExitConfirm(false);
-      }, 2000);
-
-      if (pressCount === 1) {
-        if (pageRef.current !== "scan") {
-          setPage("scan");
-          backPressCountRef.current = 0;
-        }
-        return;
-      }
-
-      if (pressCount === 2 && pageRef.current === "scan") {
-        setShowExitConfirm(true);
-        return;
-      }
-
-      if (pressCount === 3 && pageRef.current === "scan" && showExitConfirmRef.current) {
-        CapApp.exitApp();
-        return;
-      }
-    };
-
-    CapApp.addListener('backButton', handleBackButton).then(result => {
-      listener = result;
-    }).catch(() => {
-      console.log('Back button listener not available - running in browser');
-    });
-
-    return () => {
-      if (listener) listener.remove();
-      if (backPressTimerRef.current) clearTimeout(backPressTimerRef.current);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Android geri tuşu
+  const { syncRefs: syncBackButtonRefs } = useBackButton(setPage, setShowExitConfirm);
+  useEffect(() => { syncBackButtonRefs(page, showExitConfirm); });
 
   const visibleRecordsCount = useMemo(() => {
     if (isAdmin) return records.length;
@@ -367,79 +306,40 @@ export default function App() {
     ).length;
   }, [isAdmin, records, userLoginShift, user]);
 
+  // Vardiya timer — döngüsel bağımlılık ref ile kırılır
+  const handleLogoutRef = useRef(null);
+  const { graceSecsLeft, graceEndTime, resetGrace, startGrace } = useShiftTimer(
+    user, isAdmin, userLoginShift, handleLogoutRef
+  );
+
   const handleLogout = useCallback((reason = null) => {
-    inGraceRef.current = false;
+    resetGrace();
     setUser(null);
     setPage("scan");
     setUserLoginShift(null);
-    setGraceSecsLeft(null);
-    setGraceEndTime(null);
     setLogoutReason(reason);
-  }, []);
+  }, [resetGrace]);
+
+  useEffect(() => { handleLogoutRef.current = handleLogout; }, [handleLogout]);
 
   const handleLogin = useCallback((u) => {
-    inGraceRef.current = false;
+    resetGrace();
     setUser(u);
     setPage("scan");
-    setGraceSecsLeft(null);
-    setGraceEndTime(null);
     setLogoutReason(null);
-    if (u.role !== "admin") {
-      setUserLoginShift(getCurrentShift());
-    } else {
-      setUserLoginShift(null);
-    }
+    setUserLoginShift(u.role !== "admin" ? getCurrentShift() : null);
+  }, [resetGrace]);
+
+  // Sync queue
+  const handleSyncUpdate = useCallback((id, success = true, error = null) => {
+    setRecords(p => p.map(r => {
+      if (r.id !== id) return r;
+      return { ...r, syncStatus: success ? "synced" : "failed", syncError: error || "" };
+    }));
   }, []);
 
-  // Vardiya bitimi algılama — sadece normal kullanıcılar için
-  useEffect(() => {
-    if (!user || isAdmin || !userLoginShift) return;
-    const id = setInterval(() => {
-      if (inGraceRef.current) return; // grace zaten başladı, gereksiz kontrol yapma
-      const current = getCurrentShift();
-      if (current !== userLoginShift) {
-        inGraceRef.current = true;
-        // Calculate absolute end time based on shift end + grace period
-        const shiftEnd = getShiftEndTime(userLoginShift);
-        if (shiftEnd) {
-          const endTime = shiftEnd + (GRACE_PERIOD_SECS * 1000);
-          setGraceEndTime(endTime);
-          const secsLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
-          setGraceSecsLeft(secsLeft);
-        } else {
-          // Fallback: shiftEnd hesaplanamazsa şu andan itibaren say
-          const endTime = Date.now() + (GRACE_PERIOD_SECS * 1000);
-          setGraceEndTime(endTime);
-          setGraceSecsLeft(GRACE_PERIOD_SECS);
-        }
-        setPage(prev => prev === "scan" ? "data" : prev);
-      }
-    }, 15_000);
-    return () => clearInterval(id);
-  }, [user, isAdmin, userLoginShift]);
-
-  // Update grace seconds left based on absolute end time
-  useEffect(() => {
-    if (graceEndTime === null || !user) return;
-
-    const updateRemainingTime = () => {
-      const now = Date.now();
-      const secsLeft = Math.max(0, Math.floor((graceEndTime - now) / 1000));
-
-      if (secsLeft === 0) {
-        handleLogout("shift_expired");
-      } else {
-        setGraceSecsLeft(secsLeft);
-      }
-    };
-
-    // Update immediately
-    updateRemainingTime();
-
-    // Then update every second
-    const id = setInterval(updateRemainingTime, 1000);
-    return () => clearInterval(id);
-  }, [graceEndTime, user, handleLogout]);
+  const { syncQueue, setSyncQueue, isSyncing, retryableCount, addToSyncQueue, processSyncQueue } =
+    useSyncQueue(integration, toast, handleSyncUpdate);
 
   const handleSave   = useCallback(r => {
     const normalized = normalizeRecord(r, fields);
@@ -448,22 +348,6 @@ export default function App() {
     setLastSaved(rec);
   }, [addShiftDate, fields]);
 
-  const handleSyncUpdate = useCallback((id, success = true, error = null) => {
-    setRecords(p => p.map(r => {
-      if (r.id !== id) return r;
-      return {
-        ...r,
-        syncStatus: success ? "synced" : "failed",
-        syncError: error || ""
-      };
-    }));
-  }, []);
-
-  // addToSyncQueue önce tanımlanmalı — handleDelete ve handleEdit bağımlılık olarak kullanıyor
-  const addToSyncQueue = useCallback((action, recordId, payload, integrationType = "postgres_api") => {
-    const item = createQueueItem(action, recordId, payload, integrationType);
-    setSyncQueue(prev => addToQueue(prev, item));
-  }, []);
   const handleDelete = useCallback((idOrIds) => {
     const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
     const idSet = new Set(ids);
@@ -511,92 +395,6 @@ export default function App() {
         .catch(() => addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets"));
     }
   }, [fields, addShiftDate, integration, toast, handleSyncUpdate, addToSyncQueue]);
-
-  // Process sync queue - sync pending items to active integration (PostgreSQL or Google Sheets)
-  const processSyncQueue = useCallback(async (silent = false) => {
-    if (!integration.active) {
-      if (!silent) toast("Entegrasyon aktif değil", "var(--err)");
-      return { success: 0, failed: 0 };
-    }
-
-    if (isSyncing) {
-      if (!silent) toast("Senkronizasyon zaten devam ediyor", "var(--acc)");
-      return { success: 0, failed: 0 };
-    }
-
-    // Get retryable items matching current integration type (backward compat: items without integrationType → postgres_api)
-    const retryable = getRetryableItems(syncQueue).filter(item =>
-      (item.integrationType || "postgres_api") === integration.type
-    );
-    if (retryable.length === 0) {
-      if (!silent) toast("Bekleyen işlem yok", "var(--acc)");
-      return { success: 0, failed: 0 };
-    }
-
-    setIsSyncing(true);
-    let successCount = 0;
-    let failedCount = 0;
-    let retriedCount = 0;
-
-    for (const item of retryable) {
-      try {
-        const wasRetry = item.status === "failed";
-        setSyncQueue(prev => markAsProcessing(prev, item.id));
-
-        if (integration.type === "postgres_api") {
-          if (item.action === "create") {
-            const dbPayload = toDbPayload(item.payload);
-            await postgresApiInsert(integration.postgresApi, dbPayload);
-            handleSyncUpdate(item.recordId, true, null);
-          } else if (item.action === "update") {
-            const dbPayload = toDbPayload(item.payload);
-            await postgresApiUpdate(integration.postgresApi, item.recordId, dbPayload);
-            handleSyncUpdate(item.recordId, true, null);
-          } else if (item.action === "delete") {
-            await postgresApiDelete(integration.postgresApi, item.recordId);
-          }
-        } else if (integration.type === "gsheets") {
-          if (item.action === "create" || item.action === "update") {
-            await syncRecordToSheets(integration.gsheets, item.payload.record, item.payload.fields);
-            handleSyncUpdate(item.recordId, true, null);
-          } else if (item.action === "delete") {
-            await sheetsDelete(integration.gsheets, item.recordId);
-          }
-        }
-
-        setSyncQueue(prev => removeFromQueue(prev, item.id));
-        successCount++;
-        if (wasRetry) retriedCount++;
-      } catch (err) {
-        setSyncQueue(prev => markAsFailed(prev, item.id, err.message));
-        if (item.action !== "delete") {
-          handleSyncUpdate(item.recordId, false, err.message);
-        }
-        failedCount++;
-      }
-    }
-
-    setIsSyncing(false);
-
-    if (failedCount === 0 && retriedCount === 0) {
-      toast(`${successCount} işlem senkronize edildi`, "var(--ok)");
-    } else if (failedCount === 0 && retriedCount > 0) {
-      toast(`${successCount} işlem senkronize edildi (${retriedCount} yeniden denendi)`, "var(--ok)");
-    } else if (successCount > 0 && failedCount > 0) {
-      toast(`${successCount} başarılı, ${failedCount} başarısız${retriedCount > 0 ? ` (${retriedCount} yeniden denendi)` : ""}`, "var(--err)");
-    } else {
-      toast(`Tümü başarısız: ${failedCount} hata`, "var(--err)");
-    }
-
-    return { success: successCount, failed: failedCount, retried: retriedCount };
-  }, [integration, isSyncing, syncQueue, handleSyncUpdate, toast]);
-
-  // İnternet bağlantısı geldiğinde bekleyen işlemleri otomatik senkronize et
-  useEffect(() => {
-    const handleOnline = () => processSyncQueue(true);
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
-  }, [processSyncQueue]);
 
   const handleClear  = () => {
     if (window.confirm("Tüm kayıtlar silinecek. Onaylıyor musunuz?")) {
