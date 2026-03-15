@@ -9,7 +9,7 @@ import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, sheetsDeleteBulk, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets } from "./services/integrations";
+import { sheetsDelete, sheetsDeleteBulk, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig } from "./services/integrations";
 import { createQueueItem, addToQueue, removeFromQueue, getRetryableItems, markAsProcessing, markAsFailed } from "./services/syncQueue";
 import { toDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
@@ -52,6 +52,41 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const backPressCountRef = useRef(0);
   const backPressTimerRef = useRef(null);
+
+  // Refs for current config values — sunucu push'unda her zaman güncel değeri yakalar
+  const fieldsRef       = useRef(fields);
+  const custListRef     = useRef(custList);
+  const aciklamaListRef = useRef(aciklamaList);
+  const settingsRef     = useRef(settings);
+  const usersRef        = useRef(users);
+  const integrationRef  = useRef(integration);
+  useEffect(() => { fieldsRef.current       = fields;      }, [fields]);
+  useEffect(() => { custListRef.current     = custList;    }, [custList]);
+  useEffect(() => { aciklamaListRef.current = aciklamaList;}, [aciklamaList]);
+  useEffect(() => { settingsRef.current     = settings;    }, [settings]);
+  useEffect(() => { usersRef.current        = users;       }, [users]);
+  useEffect(() => { integrationRef.current  = integration; }, [integration]);
+
+  /** Uygulama yapılandırmasını (alanlar, müşteriler, açıklamalar, ayarlar) sunucuya iter.
+   *  patch ile sadece değişen alanı override et; geri kalanlar ref'ten alınır. */
+  const syncConfigToServer = useCallback((patch = {}) => {
+    const int = integrationRef.current;
+    if (!int.active || int.type !== "postgres_api") return;
+    pushServerConfig(int.postgresApi, {
+      fields:       fieldsRef.current,
+      custList:     custListRef.current,
+      aciklamaList: aciklamaListRef.current,
+      settings:     settingsRef.current,
+      ...patch,
+    }).catch(() => {});
+  }, []);
+
+  /** Kullanıcı listesini sunucuya iter. */
+  const syncUsersToServer = useCallback((updatedUsers) => {
+    const int = integrationRef.current;
+    if (!int.active || int.type !== "postgres_api") return;
+    pushServerUsers(int.postgresApi, updatedUsers).catch(() => {});
+  }, []);
 
   const addShiftDate = useCallback((rec) => {
     if (!rec) return rec;
@@ -121,6 +156,7 @@ export default function App() {
         setSettings(st.settings);
       }
 
+      let finalIntegration = null;
       if (st?.integration) {
         // Migration: convert old supabase config to new postgres_api config
         let migratedIntegration = st.integration;
@@ -148,6 +184,7 @@ export default function App() {
         } else {
           if (!migratedIntegration.gsheets.scriptUrl) migratedIntegration.gsheets.scriptUrl = DEFAULT_GSHEETS_URL;
         }
+        finalIntegration = migratedIntegration;
         setIntegration(migratedIntegration);
       }
 
@@ -200,6 +237,36 @@ export default function App() {
       }
 
       if (st?.theme) setTheme(st.theme);
+
+      // ── Sunucu senkronizasyonu ────────────────────────────────────────────
+      // postgres_api aktifse kullanıcılar ve uygulama yapılandırması
+      // sunucudan çekilir; sunucu "source of truth" olarak kullanılır.
+      // Sunucu ulaşılamaz ya da endpoint henüz yoksa sessizce local data ile devam edilir.
+      if (finalIntegration?.active && finalIntegration.type === "postgres_api" && finalIntegration.postgresApi) {
+        try {
+          const [serverUsers, serverConfig] = await Promise.allSettled([
+            fetchServerUsers(finalIntegration.postgresApi),
+            fetchServerConfig(finalIntegration.postgresApi),
+          ]);
+
+          if (serverUsers.status === "fulfilled" && Array.isArray(serverUsers.value) && serverUsers.value.length) {
+            const su = serverUsers.value;
+            const hasAdmin = su.some(u => u.username === "admin");
+            setUsers(hasAdmin ? su : [INITIAL_USERS[0], ...su]);
+          }
+
+          if (serverConfig.status === "fulfilled" && serverConfig.value) {
+            const sc = serverConfig.value;
+            if (Array.isArray(sc.fields) && sc.fields.length)      setFields(sc.fields);
+            if (Array.isArray(sc.custList) && sc.custList.length)   setCustList(sc.custList);
+            if (Array.isArray(sc.aciklamaList))                     setAciklamaList(sc.aciklamaList);
+            if (sc.settings)                                        setSettings(sc.settings);
+          }
+        } catch {
+          // Sunucuya ulaşılamadı — local data ile devam
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       setHydrated(true);
     })();
@@ -790,16 +857,61 @@ export default function App() {
     }
   };
 
+  // Wrapper setters — state'i günceller VE sunucuya iter
+  const updateFields = useCallback((val) => {
+    setFields(prev => {
+      const next = typeof val === "function" ? val(prev) : val;
+      syncConfigToServer({ fields: next });
+      return next;
+    });
+  }, [syncConfigToServer]);
+
+  const updateUsers = useCallback((val) => {
+    setUsers(prev => {
+      const next = typeof val === "function" ? val(prev) : val;
+      syncUsersToServer(next);
+      return next;
+    });
+  }, [syncUsersToServer]);
+
+  const updateSettings = useCallback((val) => {
+    setSettings(prev => {
+      const next = typeof val === "function" ? val(prev) : val;
+      syncConfigToServer({ settings: next });
+      return next;
+    });
+  }, [syncConfigToServer]);
+
   const customers = {
     list: custList,
-    add:    name => { if (!custList.includes(name)) setCustList(p => [...p, name]); },
-    remove: name => setCustList(p => p.filter(c => c !== name)),
+    add: name => {
+      if (!custList.includes(name)) {
+        const next = [...custList, name];
+        setCustList(next);
+        syncConfigToServer({ custList: next });
+      }
+    },
+    remove: name => {
+      const next = custList.filter(c => c !== name);
+      setCustList(next);
+      syncConfigToServer({ custList: next });
+    },
   };
 
   const aciklamalar = {
     list: aciklamaList,
-    add:    name => { if (!aciklamaList.includes(name)) setAciklamaList(p => [...p, name]); },
-    remove: name => setAciklamaList(p => p.filter(a => a !== name)),
+    add: name => {
+      if (!aciklamaList.includes(name)) {
+        const next = [...aciklamaList, name];
+        setAciklamaList(next);
+        syncConfigToServer({ aciklamaList: next });
+      }
+    },
+    remove: name => {
+      const next = aciklamaList.filter(a => a !== name);
+      setAciklamaList(next);
+      syncConfigToServer({ aciklamaList: next });
+    },
   };
 
   const NAV = [
@@ -812,7 +924,7 @@ export default function App() {
   ].filter(n => !n.adminOnly || isAdmin);
 
   const handleMigratePassword = (userId, hashed) => {
-    setUsers(p => p.map(u => u.id === userId ? { ...u, password: hashed } : u));
+    updateUsers(p => p.map(u => u.id === userId ? { ...u, password: hashed } : u));
   };
 
   const handleShiftTakeover = useCallback((shift, date) => {
@@ -971,9 +1083,9 @@ export default function App() {
         {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={settings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
         {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={settings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} integration={integration} onSyncUpdate={handleSyncUpdate} />}
         {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} />}
-        {page === "fields"   && <FieldsPage   fields={fields} setFields={setFields} isAdmin={isAdmin} settings={settings} />}
-        {page === "users"    && isAdmin && <UsersPage users={users} setUsers={setUsers} currentUser={user} toast={toast} />}
-        {page === "settings" && <SettingsPage settings={settings} setSettings={setSettings} integration={integration} setIntegration={setIntegration} isAdmin={isAdmin} onClearData={handleClear} onDeleteRange={handleDeleteRange} records={records} toast={toast} user={user} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}
+        {page === "fields"   && <FieldsPage   fields={fields} setFields={updateFields} isAdmin={isAdmin} settings={settings} />}
+        {page === "users"    && isAdmin && <UsersPage users={users} setUsers={updateUsers} currentUser={user} toast={toast} />}
+        {page === "settings" && <SettingsPage settings={settings} setSettings={updateSettings} integration={integration} setIntegration={setIntegration} isAdmin={isAdmin} onClearData={handleClear} onDeleteRange={handleDeleteRange} records={records} toast={toast} user={user} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}
       </div>
 
       {/* BOTTOM NAV (mobile) */}
