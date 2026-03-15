@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Ic, I } from "../ui/Icon";
 import Toggle from "../ui/Toggle";
 import PasswordInput from "../ui/PasswordInput";
@@ -21,43 +21,6 @@ export default function SettingsPage({
   const [gs, setGs] = useState({ ...integration.gsheets });
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
-
-  // Kurulum kodu (QR + metin)
-  const [deviceSetupOpen, setDeviceSetupOpen] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState(null);
-  const [setupCode, setSetupCode] = useState("");
-
-  useEffect(() => {
-    if (!deviceSetupOpen || !integration.active || integration.type !== "postgres_api") return;
-    const payload = btoa(JSON.stringify({
-      v: 1,
-      url: integration.postgresApi.serverUrl,
-      key: integration.postgresApi.apiKey,
-    }));
-    setSetupCode(payload);
-    import("qrcode").then(({ default: QRCode }) => {
-      QRCode.toDataURL(payload, { width: 220, margin: 1, color: { dark: "#000000", light: "#ffffff" } })
-        .then(setQrDataUrl)
-        .catch(() => setQrDataUrl(null));
-    }).catch(() => setQrDataUrl(null));
-  }, [deviceSetupOpen, integration]);
-
-  // Yeni cihaz: kurulum kodu yapıştırma
-  const [setupInputOpen, setSetupInputOpen] = useState(false);
-  const [setupInput, setSetupInput] = useState("");
-
-  const applySetupCode = () => {
-    try {
-      const { v, url, key } = JSON.parse(atob(setupInput.trim()));
-      if (v !== 1 || !url || !key) throw new Error();
-      setIntegration(p => ({ ...p, type: "postgres_api", active: true, postgresApi: { serverUrl: url, apiKey: key } }));
-      toast("Entegrasyon aktif edildi");
-      setSetupInput("");
-      setSetupInputOpen(false);
-    } catch {
-      toast("Geçersiz kurulum kodu", "var(--err)");
-    }
-  };
 
   // Kişisel ayarların güncel değerlerini okumak için yardımcı
   // userSettings override eder, yoksa settings'ten, yoksa varsayılan
@@ -160,44 +123,6 @@ export default function SettingsPage({
 
         <div className="section-hd">Entegrasyon</div>
 
-        {/* Kurulum Koduyla Hızlı Kur */}
-        <div className="int-card" style={{ marginBottom: 8 }}>
-          <div className={`int-hd ${setupInputOpen ? "open" : ""}`} onClick={() => setSetupInputOpen(p => !p)}>
-            <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(139,92,246,.15)", border: "1.5px solid rgba(139,92,246,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Ic d={I.scan} s={17} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>Kurulum Koduyla Hızlı Kur</div>
-              <div style={{ fontSize: 12, color: "var(--tx2)" }}>Admin cihazından alınan kodu yapıştırarak anında aktif et</div>
-            </div>
-            <Ic d={I.chevD} s={14} />
-          </div>
-          {setupInputOpen && (
-            <div className="int-bd">
-              <div className="info-box inf" style={{ fontSize: 12 }}>
-                Admin cihazındaki Ayarlar → <b>Cihaz Kurulumu</b> bölümünden kodu kopyalayın ve aşağıya yapıştırın.
-              </div>
-              <div>
-                <label className="lbl">Kurulum Kodu</label>
-                <textarea
-                  value={setupInput}
-                  onChange={e => setSetupInput(e.target.value)}
-                  placeholder="eyJ2IjoxLCJ1cmwiOiJodHRwc..."
-                  rows={3}
-                  style={{ width: "100%", borderRadius: 10, padding: "8px 10px", background: "var(--s2)", color: "var(--tx)", border: "1.5px solid var(--brd)", fontSize: 12, fontFamily: "var(--mono)", resize: "none", boxSizing: "border-box" }}
-                />
-              </div>
-              <button
-                className="btn btn-ok btn-full"
-                disabled={!setupInput.trim()}
-                onClick={applySetupCode}
-              >
-                <Ic d={I.check} s={15} /> Uygula ve Aktif Et
-              </button>
-            </div>
-          )}
-        </div>
-
         {integration.active && (
           <div style={{ margin: "0 0 10px", padding: "10px 12px", background: "var(--ok2)", border: "1.5px solid var(--ok3)", borderRadius: "var(--r)", fontSize: 12, color: "var(--ok)", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ok)" }} />
@@ -256,61 +181,6 @@ export default function SettingsPage({
             </div>
           )}
         </div>
-
-        {/* Cihaz Kurulumu — QR kod + kurulum kodu paylaşımı */}
-        {integration.active && integration.type === "postgres_api" && (
-          <>
-            <div className="section-hd">Cihaz Kurulumu</div>
-            <div className="int-card">
-              <div className={`int-hd ${deviceSetupOpen ? "open" : ""}`} onClick={() => setDeviceSetupOpen(p => !p)}>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(139,92,246,.15)", border: "1.5px solid rgba(139,92,246,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Ic d={I.scan} s={17} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>Yeni Cihaz Ekle</div>
-                  <div style={{ fontSize: 12, color: "var(--tx2)" }}>QR kod veya kurulum koduyla diğer cihazları hızlıca yapılandır</div>
-                </div>
-                <Ic d={I.chevD} s={14} />
-              </div>
-              {deviceSetupOpen && (
-                <div className="int-bd">
-                  <div className="info-box inf" style={{ fontSize: 12 }}>
-                    Bu QR kodu diğer cihazda taratın <b>ya da</b> kurulum kodunu kopyalayıp diğer cihazda Ayarlar → Entegrasyon → <b>"Kurulum Koduyla Hızlı Kur"</b> bölümüne yapıştırın.
-                  </div>
-                  {qrDataUrl && (
-                    <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
-                      <img src={qrDataUrl} alt="Kurulum QR" style={{ borderRadius: 8, border: "1.5px solid var(--brd)" }} />
-                    </div>
-                  )}
-                  {setupCode && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <label className="lbl">Kurulum Kodu</label>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <div style={{
-                          flex: 1, padding: "8px 10px", background: "var(--s2)",
-                          border: "1.5px solid var(--brd)", borderRadius: 10,
-                          fontSize: 11, fontFamily: "var(--mono)", color: "var(--tx2)",
-                          wordBreak: "break-all", lineHeight: 1.5,
-                        }}>{setupCode}</div>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ flexShrink: 0, alignSelf: "flex-start", padding: "8px 12px" }}
-                          onClick={() => {
-                            navigator.clipboard?.writeText(setupCode)
-                              .then(() => toast("Kod kopyalandı"))
-                              .catch(() => toast("Kopyalanamadı", "var(--err)"));
-                          }}
-                        >
-                          Kopyala
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        )}
 
         {(settings.allowClearData ?? true) && (
           <>
