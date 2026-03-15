@@ -343,18 +343,6 @@ export default function App() {
     };
   }, [addShiftDate]);
 
-  // Persist on changes
-  useEffect(() => {
-    if (!hydrated) return;
-    // Create activeSession object if user is logged in
-    const activeSession = user ? {
-      username: user.username,
-      loginShift: userLoginShift,
-      loginAt: new Date().toISOString()
-    } : null;
-    saveState({ users, fields, records, lastSaved, custList, aciklamaList, settings, integration, shiftTakeovers, activeSession, syncQueue, theme });
-  }, [hydrated, users, fields, records, lastSaved, custList, aciklamaList, settings, integration, shiftTakeovers, user, userLoginShift, syncQueue, theme]);
-
   const { toasts, add: toast } = useToast();
 
   // Startup'tan gelen bildirimler oturum açık olunca gösterilir
@@ -476,6 +464,17 @@ export default function App() {
 
   const { syncQueue, setSyncQueue, isSyncing, retryableCount, addToSyncQueue, processSyncQueue } =
     useSyncQueue(integration, toast, handleSyncUpdate);
+
+  // Persist on changes — syncQueue'dan SONRA tanımlanmalı (minifier TDZ önleme)
+  useEffect(() => {
+    if (!hydrated) return;
+    const activeSession = user ? {
+      username: user.username,
+      loginShift: userLoginShift,
+      loginAt: new Date().toISOString()
+    } : null;
+    saveState({ users, fields, records, lastSaved, custList, aciklamaList, settings, integration, shiftTakeovers, activeSession, syncQueue, theme });
+  }, [hydrated, users, fields, records, lastSaved, custList, aciklamaList, settings, integration, shiftTakeovers, user, userLoginShift, syncQueue, theme]);
 
   // SSE: sunucudan gelince kullanıcıları ve config'i güncelle
   const handleSSEUsersUpdate = useCallback(async () => {
