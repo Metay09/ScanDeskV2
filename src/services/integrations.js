@@ -1,3 +1,54 @@
+// ─── Yardımcı ────────────────────────────────────────────────────────────────
+const base = (cfg) => cfg.serverUrl.replace(/\/$/, "");
+const authHeaders = (cfg) => ({ "x-api-key": cfg.apiKey, "Content-Type": "application/json" });
+
+// ─── Sunucu-Senkronizasyon: Kullanıcılar ────────────────────────────────────
+
+/** Sunucudaki kullanıcı listesini çeker. */
+export async function fetchServerUsers(cfg) {
+  const r = await fetch(`${base(cfg)}/api/users`, {
+    headers: { "x-api-key": cfg.apiKey },
+  });
+  if (!r.ok) throw new Error(`fetchServerUsers ${r.status}`);
+  return r.json();
+}
+
+/** Kullanıcı listesini sunucuya yazar (tam üzerine yazar). */
+export async function pushServerUsers(cfg, users) {
+  const r = await fetch(`${base(cfg)}/api/users`, {
+    method: "PUT",
+    headers: authHeaders(cfg),
+    body: JSON.stringify(users),
+  });
+  if (!r.ok) throw new Error(`pushServerUsers ${r.status}`);
+}
+
+// ─── Sunucu-Senkronizasyon: Uygulama Yapılandırması ─────────────────────────
+
+/**
+ * Uygulama yapılandırmasını (alanlar, müşteri listesi, açıklama listesi, ayarlar)
+ * sunucudan çeker. Dönen nesne: { fields, custList, aciklamaList, settings }
+ */
+export async function fetchServerConfig(cfg) {
+  const r = await fetch(`${base(cfg)}/api/app-config`, {
+    headers: { "x-api-key": cfg.apiKey },
+  });
+  if (!r.ok) throw new Error(`fetchServerConfig ${r.status}`);
+  return r.json();
+}
+
+/** Uygulama yapılandırmasını sunucuya yazar (tam üzerine yazar). */
+export async function pushServerConfig(cfg, data) {
+  const r = await fetch(`${base(cfg)}/api/app-config`, {
+    method: "PUT",
+    headers: authHeaders(cfg),
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`pushServerConfig ${r.status}`);
+}
+
+// ─── PostgreSQL Kayıt CRUD ───────────────────────────────────────────────────
+
 export async function postgresApiInsert(cfg, row) {
   const r = await fetch(`${cfg.serverUrl.replace(/\/$/, "")}/api/taramalar`, {
     method: "POST",
