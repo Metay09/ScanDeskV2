@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import QRCode from "qrcode";
 import { Ic, I } from "../ui/Icon";
 import Toggle from "../ui/Toggle";
 import PasswordInput from "../ui/PasswordInput";
@@ -36,9 +35,11 @@ export default function SettingsPage({
       key: integration.postgresApi.apiKey,
     }));
     setSetupCode(payload);
-    QRCode.toDataURL(payload, { width: 220, margin: 1, color: { dark: "#000000", light: "#ffffff" } })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null));
+    import("qrcode").then(({ default: QRCode }) => {
+      QRCode.toDataURL(payload, { width: 220, margin: 1, color: { dark: "#000000", light: "#ffffff" } })
+        .then(setQrDataUrl)
+        .catch(() => setQrDataUrl(null));
+    }).catch(() => setQrDataUrl(null));
   }, [deviceSetupOpen, integration]);
 
   // Yeni cihaz: kurulum kodu yapıştırma
