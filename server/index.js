@@ -7,6 +7,7 @@
  *      - /api/taramalar  (CRUD — barkod kayıtları)
  *      - /api/users      (GET/PUT — kullanıcı listesi)
  *      - /api/app-config (GET/PUT — alanlar, müşteriler, açıklamalar, ayarlar)
+ *      - /api/events     (GET — SSE bağlantısı, gerçek zamanlı senkronizasyon)
  *
  * Ortam değişkenleri:
  *   DATABASE_URL  — PostgreSQL bağlantı dizesi (zorunlu)
@@ -26,16 +27,53 @@ const app  = express();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const PORT = process.env.PORT || 3000;
 
+// ── SSE Bağlantı Yöneticisi ──────────────────────────────────────────────────
+const sseClients = new Map();
+let sseClientIdCounter = 0;
+
+function broadcastSSE(event, data = {}) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const [id, res] of sseClients) {
+    try { res.write(msg); } catch { sseClients.delete(id); }
+  }
+}
+
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json());
 
+// API key hem header'dan hem URL query param'dan kabul edilir
+// (SSE bağlantısında tarayıcı custom header gönderemez, key=... ile URL'ye eklenir)
 function requireApiKey(req, res, next) {
   const key = process.env.API_KEY;
-  if (key && req.headers["x-api-key"] !== key) {
+  if (key && req.headers["x-api-key"] !== key && req.query.key !== key) {
     return res.status(403).json({ error: "Geçersiz API key" });
   }
   next();
 }
+
+// ── /api/events (SSE) ────────────────────────────────────────────────────────
+app.get("/api/events", requireApiKey, (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const clientId = ++sseClientIdCounter;
+  sseClients.set(clientId, res);
+
+  res.write(`event: connected\ndata: ${JSON.stringify({ id: clientId })}\n\n`);
+
+  // 25 saniyede bir heartbeat — bağlantı kesme önler
+  const heartbeat = setInterval(() => {
+    try { res.write(`:heartbeat\n\n`); }
+    catch { clearInterval(heartbeat); sseClients.delete(clientId); }
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    sseClients.delete(clientId);
+  });
+});
 
 // ── /api/taramalar ───────────────────────────────────────────────────────────
 
@@ -79,6 +117,7 @@ app.post("/api/taramalar", requireApiKey, async (req, res) => {
         JSON.stringify(r.custom_fields || {}),
       ]
     );
+    broadcastSSE("tarama_added", { id: r.id });
     res.status(201).json({ ok: true });
   } catch (err) {
     console.error("[taramalar POST]", err.message);
@@ -108,6 +147,7 @@ app.patch("/api/taramalar/:id", requireApiKey, async (req, res) => {
         req.params.id,
       ]
     );
+    broadcastSSE("tarama_updated", { id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     console.error("[taramalar PATCH]", err.message);
@@ -118,6 +158,7 @@ app.patch("/api/taramalar/:id", requireApiKey, async (req, res) => {
 app.delete("/api/taramalar/:id", requireApiKey, async (req, res) => {
   try {
     await pool.query("DELETE FROM taramalar WHERE id=$1", [req.params.id]);
+    broadcastSSE("tarama_deleted", { id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     console.error("[taramalar DELETE]", err.message);
@@ -155,6 +196,7 @@ app.put("/api/users", requireApiKey, async (req, res) => {
   try {
     if (!Array.isArray(req.body)) return res.status(400).json({ error: "Array bekleniyor" });
     await setState("users", req.body);
+    broadcastSSE("users_updated", {});
     res.json({ ok: true });
   } catch (err) {
     console.error("[users PUT]", err.message);
@@ -179,6 +221,7 @@ app.put("/api/app-config", requireApiKey, async (req, res) => {
       return res.status(400).json({ error: "Nesne bekleniyor" });
     }
     await setState("app_config", req.body);
+    broadcastSSE("config_updated", {});
     res.json({ ok: true });
   } catch (err) {
     console.error("[app-config PUT]", err.message);

@@ -1,5 +1,24 @@
+// Varsayılan kişisel kullanıcı ayarları
+export const DEFAULT_USER_SETTINGS = {
+  vibration: true,
+  beep: true,
+  autoSave: true,
+  recentLimit: 10,
+  theme: "dark",
+};
+
 export const INITIAL_USERS = [
-  { id: "u0", username: "admin", password: "admin123", role: "admin", name: "Admin", active: true },
+  {
+    id: "u0",
+    username: "admin",
+    password: "admin123",
+    role: "admin",
+    name: "Admin",
+    active: true,
+    custList: [],
+    aciklamaList: [],
+    userSettings: { ...DEFAULT_USER_SETTINGS },
+  },
 ];
 
 // Entegrasyon için varsayılan değerler — kullanıcı Ayarlar'dan doldurur
@@ -8,18 +27,15 @@ export const DEFAULT_POSTGRES_URL = "";
 export const DEFAULT_POSTGRES_KEY = "";
 export const DEFAULT_GSHEETS_URL  = "";
 
+// Admin (global) ayarlar — sadece admin değiştirebilir, tüm cihazlara uygulanır
 export const INITIAL_SETTINGS = {
-  autoSave: true,
   addDetailAfterScan: false,
-  vibration: true,
-  beep: true,
   allowExport: true,
   allowImport: true,
   allowClearData: true,
   allowAddField: true,
   allowEditField: true,
   allowDeleteField: true,
-  recentLimit: 10,
   scanDebounceMs: 800,
   enforceBarcodeLengthMatch: true,
 };

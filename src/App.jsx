@@ -4,16 +4,17 @@ import { Share } from "@capacitor/share";
 import * as XLSX from "xlsx";
 
 import "./index.css";
-import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL } from "./constants";
+import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_USER_SETTINGS } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig } from "./services/integrations";
-import { toDbPayload } from "./services/recordModel";
+import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords } from "./services/integrations";
+import { toDbPayload, fromDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
 import { useBackButton } from "./hooks/useBackButton";
 import { useShiftTimer } from "./hooks/useShiftTimer";
 import { useSyncQueue } from "./hooks/useSyncQueue";
+import { useServerSync } from "./hooks/useServerSync";
 import { Ic, I } from "./components/ui/Icon";
 import Login from "./components/pages/Login";
 import ScanPage from "./components/pages/ScanPage";
@@ -44,6 +45,11 @@ export default function App() {
   const [shiftTakeovers, setShiftTakeovers] = useState({});
   const [logoutReason, setLogoutReason] = useState(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  // Kişisel kullanıcı ayarları (user.userSettings'ten yüklenir)
+  const [userSettings, setUserSettings] = useState({});
+  // Startup sonrası gösterilecek bildirimler
+  const [pendingNotification, setPendingNotification] = useState(null); // { msg, color }
+  const [adminSyncWarning, setAdminSyncWarning] = useState(false);
 
   // Refs for current config values — sunucu push'unda her zaman güncel değeri yakalar
   const fieldsRef       = useRef(fields);
@@ -78,6 +84,33 @@ export default function App() {
     const int = integrationRef.current;
     if (!int.active || int.type !== "postgres_api") return;
     pushServerUsers(int.postgresApi, updatedUsers).catch(() => {});
+  }, []);
+
+  // İnternet gelince: sunucudan çek → merge → eksik local kullanıcıları push et
+  useEffect(() => {
+    const handleOnline = async () => {
+      const int = integrationRef.current;
+      if (!int.active || int.type !== "postgres_api") return;
+      try {
+        const su = await fetchServerUsers(int.postgresApi);
+        if (Array.isArray(su) && su.length) {
+          const serverById = Object.fromEntries(su.map(u => [u.id, u]));
+          const serverByUsername = Object.fromEntries(su.map(u => [u.username, u]));
+          const localOnly = usersRef.current.filter(
+            u => !serverById[u.id] && !serverByUsername[u.username]
+          );
+          if (localOnly.length > 0) {
+            const merged = [...su, ...localOnly];
+            setUsers(merged);
+            await pushServerUsers(int.postgresApi, merged);
+          }
+        } else {
+          await pushServerUsers(int.postgresApi, usersRef.current);
+        }
+      } catch { /* sessizce devam */ }
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
   }, []);
 
   const addShiftDate = useCallback((rec) => {
@@ -233,15 +266,57 @@ export default function App() {
       // Sunucu ulaşılamaz ya da endpoint henüz yoksa sessizce local data ile devam edilir.
       if (finalIntegration?.active && finalIntegration.type === "postgres_api" && finalIntegration.postgresApi) {
         try {
-          const [serverUsers, serverConfig] = await Promise.allSettled([
+          const [serverUsers, serverConfig, serverRecords] = await Promise.allSettled([
             fetchServerUsers(finalIntegration.postgresApi),
             fetchServerConfig(finalIntegration.postgresApi),
+            fetchServerRecords(finalIntegration.postgresApi),
           ]);
 
           if (serverUsers.status === "fulfilled" && Array.isArray(serverUsers.value) && serverUsers.value.length) {
             const su = serverUsers.value;
-            const hasAdmin = su.some(u => u.username === "admin");
-            setUsers(hasAdmin ? su : [INITIAL_USERS[0], ...su]);
+            const serverById = Object.fromEntries(su.map(u => [u.id, u]));
+            const serverByUsername = Object.fromEntries(su.map(u => [u.username, u]));
+            const localOnly = loadedUsers.filter(u => !serverById[u.id] && !serverByUsername[u.username]);
+            const merged = [...su, ...localOnly];
+            const hasAdmin = merged.some(u => u.username === "admin");
+            const finalMerged = hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
+            setUsers(finalMerged);
+            if (localOnly.length > 0) {
+              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(() => {});
+            }
+
+            // ── Aktif oturum yenileme (Madde 2) ──────────────────────────
+            if (st?.activeSession?.username) {
+              const activeName = st.activeSession.username;
+              const localUser  = loadedUsers.find(u => u.username === activeName);
+              const serverUser = serverByUsername[activeName];
+
+              if (serverUser) {
+                if (serverUser.active === false && localUser?.role !== "admin") {
+                  // Pasif edilmiş normal kullanıcı → oturumu sonlandır
+                  setUser(null);
+                  setLogoutReason("account_removed");
+                } else {
+                  // Güncel user objesiyle bellekteki oturumu güncelle
+                  setUser(serverUser);
+                  const nameOrPassChanged =
+                    localUser?.name !== serverUser.name ||
+                    localUser?.password !== serverUser.password;
+                  if (nameOrPassChanged) {
+                    setPendingNotification({ msg: "Hesap bilgileriniz sunucudan güncellendi.", color: "var(--inf)" });
+                  }
+                  // Kişisel ayarları güncelle
+                  if (serverUser.userSettings) setUserSettings(serverUser.userSettings);
+                }
+              } else if (localUser?.role === "admin") {
+                // Admin sunucuda yok → kapatma, sadece uyarı
+                setAdminSyncWarning(true);
+              } else if (localUser) {
+                // Normal kullanıcı sunucuda yok → oturumu sonlandır
+                setUser(null);
+                setLogoutReason("account_removed");
+              }
+            }
           }
 
           if (serverConfig.status === "fulfilled" && serverConfig.value) {
@@ -250,6 +325,11 @@ export default function App() {
             if (Array.isArray(sc.custList) && sc.custList.length)   setCustList(sc.custList);
             if (Array.isArray(sc.aciklamaList))                     setAciklamaList(sc.aciklamaList);
             if (sc.settings)                                        setSettings(sc.settings);
+          }
+
+          if (serverRecords.status === "fulfilled" && Array.isArray(serverRecords.value)) {
+            const appRecords = serverRecords.value.map(r => fromDbPayload(r));
+            setRecords(normalizeLoadedRecords(appRecords, loadedFields));
           }
         } catch {
           // Sunucuya ulaşılamadı — local data ile devam
@@ -279,7 +359,21 @@ export default function App() {
 
   const { toasts, add: toast } = useToast();
 
+  // Startup'tan gelen bildirimler oturum açık olunca gösterilir
+  useEffect(() => {
+    if (pendingNotification && user) {
+      toast(pendingNotification.msg, pendingNotification.color);
+      setPendingNotification(null);
+    }
+  }, [pendingNotification, user]);
+
   const isAdmin = user?.role === "admin";
+
+  // Kişisel + global ayarları birleştir (kişisel override eder)
+  const effectiveSettings = useMemo(
+    () => ({ ...DEFAULT_USER_SETTINGS, ...settings, ...userSettings }),
+    [settings, userSettings]
+  );
 
   // Scroll pozisyonunu düzenleme sonrası korumak için
   const scrollAreaRef = useRef(null);
@@ -318,16 +412,60 @@ export default function App() {
     setPage("scan");
     setUserLoginShift(null);
     setLogoutReason(reason);
+    setUserSettings({});
+    setAdminSyncWarning(false);
+    setPendingNotification(null);
+    setCustList(DEFAULT_CUSTS);
+    setAciklamaList(DEFAULT_ACIKLAMAS);
   }, [resetGrace]);
 
   useEffect(() => { handleLogoutRef.current = handleLogout; }, [handleLogout]);
 
-  const handleLogin = useCallback((u) => {
+  const handleLogin = useCallback(async (u, serverUsers = null) => {
     resetGrace();
     setUser(u);
     setPage("scan");
     setLogoutReason(null);
+    setAdminSyncWarning(false);
+    setPendingNotification(null);
     setUserLoginShift(u.role !== "admin" ? getCurrentShift() : null);
+
+    // Kişisel ayarları ve listeleri kullanıcı objesinden yükle
+    setUserSettings(u.userSettings || {});
+    setCustList(Array.isArray(u.custList) && u.custList.length ? u.custList : DEFAULT_CUSTS);
+    setAciklamaList(Array.isArray(u.aciklamaList) ? u.aciklamaList : DEFAULT_ACIKLAMAS);
+
+    // Login sayfasından serverUsers geldiyse kullanıcı listesini güncelle
+    if (serverUsers) {
+      setUsers(prev => {
+        const serverById = Object.fromEntries(serverUsers.map(x => [x.id, x]));
+        const serverByUsername = Object.fromEntries(serverUsers.map(x => [x.username, x]));
+        const localOnly = prev.filter(x => !serverById[x.id] && !serverByUsername[x.username]);
+        const merged = [...serverUsers, ...localOnly];
+        const hasAdmin = merged.some(x => x.username === "admin");
+        return hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
+      });
+    }
+
+    // Giriş yapınca sunucudan en güncel kayıtları çek
+    const int = integrationRef.current;
+    if (int.active && int.type === "postgres_api") {
+      try {
+        const serverRecs = await fetchServerRecords(int.postgresApi);
+        if (Array.isArray(serverRecs)) {
+          const appRecords = serverRecs.map(r => fromDbPayload(r));
+          setRecords(() => {
+            return appRecords.map(r => {
+              const n = normalizeRecord(r, fieldsRef.current);
+              const sd = deriveShiftDate(n);
+              return sd ? { ...n, shiftDate: sd } : n;
+            });
+          });
+        }
+      } catch {
+        // Sunucuya ulaşılamadı — mevcut local data ile devam
+      }
+    }
   }, [resetGrace]);
 
   // Sync queue
@@ -340,6 +478,56 @@ export default function App() {
 
   const { syncQueue, setSyncQueue, isSyncing, retryableCount, addToSyncQueue, processSyncQueue } =
     useSyncQueue(integration, toast, handleSyncUpdate);
+
+  // SSE: sunucudan gelince kullanıcıları ve config'i güncelle
+  const handleSSEUsersUpdate = useCallback(async () => {
+    const int = integrationRef.current;
+    if (!int.active || int.type !== "postgres_api") return;
+    try {
+      const su = await fetchServerUsers(int.postgresApi);
+      if (!Array.isArray(su) || !su.length) return;
+      const serverByUsername = Object.fromEntries(su.map(u => [u.username, u]));
+      setUsers(prev => {
+        const serverById = Object.fromEntries(su.map(u => [u.id, u]));
+        const localOnly = prev.filter(u => !serverById[u.id] && !serverByUsername[u.username]);
+        const merged = [...su, ...localOnly];
+        const hasAdmin = merged.some(u => u.username === "admin");
+        return hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
+      });
+      // Aktif kullanıcıyı güncelle (Madde 2 mantığı)
+      setUser(prev => {
+        if (!prev) return prev;
+        const serverUser = serverByUsername[prev.username];
+        if (!serverUser) return prev;
+        if (serverUser.active === false && prev.role !== "admin") {
+          handleLogoutRef.current?.("account_removed");
+          return prev;
+        }
+        const changed = prev.name !== serverUser.name || prev.password !== serverUser.password;
+        if (changed) setPendingNotification({ msg: "Hesap bilgileriniz sunucudan güncellendi.", color: "var(--inf)" });
+        return serverUser;
+      });
+    } catch { /* sessiz */ }
+  }, []);
+
+  const handleSSEConfigUpdate = useCallback(async () => {
+    const int = integrationRef.current;
+    if (!int.active || int.type !== "postgres_api") return;
+    try {
+      const sc = await fetchServerConfig(int.postgresApi);
+      if (!sc) return;
+      if (Array.isArray(sc.fields) && sc.fields.length) setFields(sc.fields);
+      if (Array.isArray(sc.custList) && sc.custList.length) setCustList(sc.custList);
+      if (Array.isArray(sc.aciklamaList)) setAciklamaList(sc.aciklamaList);
+      if (sc.settings) setSettings(sc.settings);
+    } catch { /* sessiz */ }
+  }, []);
+
+  useServerSync({
+    integration,
+    onUsersUpdate: handleSSEUsersUpdate,
+    onConfigUpdate: handleSSEConfigUpdate,
+  });
 
   const handleSave   = useCallback(r => {
     const normalized = normalizeRecord(r, fields);
@@ -672,6 +860,18 @@ export default function App() {
     });
   }, [syncUsersToServer]);
 
+  // Kişisel ayar değiştirince user objesini ve sunucuyu güncelle
+  const updateUserSettings = useCallback((patch) => {
+    setUserSettings(prev => {
+      const next = { ...prev, ...patch };
+      if (user) {
+        updateUsers(p => p.map(u => u.id === user.id ? { ...u, userSettings: next } : u));
+        setUser(u => u ? { ...u, userSettings: next } : u);
+      }
+      return next;
+    });
+  }, [user, updateUsers]);
+
   const updateSettings = useCallback((val) => {
     setSettings(prev => {
       const next = typeof val === "function" ? val(prev) : val;
@@ -680,19 +880,29 @@ export default function App() {
     });
   }, [syncConfigToServer]);
 
+  // Müşteri/açıklama değişince kullanıcı objesini güncelle ve sunucuya push et
+  const syncUserLists = useCallback((custNext, aciklamaNext) => {
+    if (!user) return;
+    const patch = {};
+    if (custNext !== undefined) patch.custList = custNext;
+    if (aciklamaNext !== undefined) patch.aciklamaList = aciklamaNext;
+    updateUsers(p => p.map(u => u.id === user.id ? { ...u, ...patch } : u));
+    setUser(u => u ? { ...u, ...patch } : u);
+  }, [user]);
+
   const customers = {
     list: custList,
     add: name => {
       if (!custList.includes(name)) {
         const next = [...custList, name];
         setCustList(next);
-        syncConfigToServer({ custList: next });
+        syncUserLists(next, undefined);
       }
     },
     remove: name => {
       const next = custList.filter(c => c !== name);
       setCustList(next);
-      syncConfigToServer({ custList: next });
+      syncUserLists(next, undefined);
     },
   };
 
@@ -702,13 +912,13 @@ export default function App() {
       if (!aciklamaList.includes(name)) {
         const next = [...aciklamaList, name];
         setAciklamaList(next);
-        syncConfigToServer({ aciklamaList: next });
+        syncUserLists(undefined, next);
       }
     },
     remove: name => {
       const next = aciklamaList.filter(a => a !== name);
       setAciklamaList(next);
-      syncConfigToServer({ aciklamaList: next });
+      syncUserLists(undefined, next);
     },
   };
 
@@ -741,7 +951,7 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <Login users={users} onLogin={handleLogin} onMigratePassword={handleMigratePassword} logoutReason={logoutReason} />;
+  if (!user) return <Login users={users} onLogin={handleLogin} onMigratePassword={handleMigratePassword} logoutReason={logoutReason} integration={integration} />;
 
   return (
     <div className="shell">
@@ -878,12 +1088,12 @@ export default function App() {
 
       {/* CONTENT */}
       <div className="scroll-area" ref={scrollAreaRef}>
-        {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={settings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
-        {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={settings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} integration={integration} onSyncUpdate={handleSyncUpdate} />}
+        {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={effectiveSettings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
+        {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={effectiveSettings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} integration={integration} onSyncUpdate={handleSyncUpdate} />}
         {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} />}
-        {page === "fields"   && <FieldsPage   fields={fields} setFields={updateFields} isAdmin={isAdmin} settings={settings} />}
+        {page === "fields"   && <FieldsPage   fields={fields} setFields={updateFields} isAdmin={isAdmin} settings={effectiveSettings} />}
         {page === "users"    && isAdmin && <UsersPage users={users} setUsers={updateUsers} currentUser={user} toast={toast} />}
-        {page === "settings" && <SettingsPage settings={settings} setSettings={updateSettings} integration={integration} setIntegration={setIntegration} isAdmin={isAdmin} onClearData={handleClear} onDeleteRange={handleDeleteRange} records={records} toast={toast} user={user} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}
+        {page === "settings" && <SettingsPage settings={settings} setSettings={updateSettings} userSettings={userSettings} onUpdateUserSettings={updateUserSettings} integration={integration} setIntegration={setIntegration} isAdmin={isAdmin} onClearData={handleClear} onDeleteRange={handleDeleteRange} records={records} toast={toast} user={user} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}
       </div>
 
       {/* BOTTOM NAV (mobile) */}
@@ -895,6 +1105,22 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {/* ADMIN SUNUCU UYARISI */}
+      {adminSyncWarning && isAdmin && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 9100,
+          background: "var(--acc)", color: "#fff",
+          padding: "8px 16px", display: "flex", alignItems: "center",
+          gap: 10, fontSize: 12, fontWeight: 600,
+          boxShadow: "0 2px 8px rgba(0,0,0,.3)"
+        }}>
+          <Ic d={I.warning} s={14} />
+          <span style={{ flex: 1 }}>Uyarı: Admin hesabı sunucuda bulunamadı. Local oturum devam ediyor.</span>
+          <button className="btn btn-sm" style={{ background: "rgba(255,255,255,.2)", color: "#fff", border: "1px solid rgba(255,255,255,.4)", padding: "2px 8px" }}
+            onClick={() => setAdminSyncWarning(false)}>✕</button>
+        </div>
+      )}
 
       {/* GRACE PERIOD BANNER */}
       {graceSecsLeft !== null && !isAdmin && (

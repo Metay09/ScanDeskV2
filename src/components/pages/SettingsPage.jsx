@@ -1,16 +1,66 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { Ic, I } from "../ui/Icon";
 import Toggle from "../ui/Toggle";
 import PasswordInput from "../ui/PasswordInput";
 
-export default function SettingsPage({ settings, setSettings, integration, setIntegration, isAdmin, onClearData, onDeleteRange, records, toast, user, onLogout, theme, onToggleTheme }) {
-  const set = (k, v) => setSettings(p => ({ ...p, [k]: v }));
+export default function SettingsPage({
+  settings, setSettings,
+  userSettings, onUpdateUserSettings,
+  integration, setIntegration,
+  isAdmin, onClearData, onDeleteRange,
+  records, toast, user, onLogout, theme, onToggleTheme,
+}) {
+  // Admin (global) ayarlar kısayolu
+  const setGlobal = (k, v) => setSettings(p => ({ ...p, [k]: v }));
+  // Kişisel ayar kısayolu
+  const setPersonal = (k, v) => onUpdateUserSettings({ [k]: v });
+
   const [pgOpen, setPgOpen] = useState(false);
   const [gsOpen, setGsOpen] = useState(false);
   const [pg, setPg] = useState({ ...integration.postgresApi });
   const [gs, setGs] = useState({ ...integration.gsheets });
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
+
+  // Kurulum kodu (QR + metin)
+  const [deviceSetupOpen, setDeviceSetupOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [setupCode, setSetupCode] = useState("");
+
+  useEffect(() => {
+    if (!deviceSetupOpen || !integration.active || integration.type !== "postgres_api") return;
+    const payload = btoa(JSON.stringify({
+      v: 1,
+      url: integration.postgresApi.serverUrl,
+      key: integration.postgresApi.apiKey,
+    }));
+    setSetupCode(payload);
+    QRCode.toDataURL(payload, { width: 220, margin: 1, color: { dark: "#000000", light: "#ffffff" } })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [deviceSetupOpen, integration]);
+
+  // Yeni cihaz: kurulum kodu yapıştırma
+  const [setupInputOpen, setSetupInputOpen] = useState(false);
+  const [setupInput, setSetupInput] = useState("");
+
+  const applySetupCode = () => {
+    try {
+      const { v, url, key } = JSON.parse(atob(setupInput.trim()));
+      if (v !== 1 || !url || !key) throw new Error();
+      setIntegration(p => ({ ...p, type: "postgres_api", active: true, postgresApi: { serverUrl: url, apiKey: key } }));
+      toast("Entegrasyon aktif edildi");
+      setSetupInput("");
+      setSetupInputOpen(false);
+    } catch {
+      toast("Geçersiz kurulum kodu", "var(--err)");
+    }
+  };
+
+  // Kişisel ayarların güncel değerlerini okumak için yardımcı
+  // userSettings override eder, yoksa settings'ten, yoksa varsayılan
+  const personal = (k, def) => userSettings?.[k] !== undefined ? userSettings[k] : (settings?.[k] !== undefined ? settings[k] : def);
 
   const Row = ({ icon, label, sub, children, onClick }) => (
     <div className={`s-row ${onClick ? "clickable" : ""}`} onClick={onClick}>
@@ -25,47 +75,52 @@ export default function SettingsPage({ settings, setSettings, integration, setIn
 
   return (
     <div className="page" style={{ paddingLeft: 0, paddingRight: 0 }}>
-      <div className="section-hd">Tarama</div>
+
+      {/* ── Kişisel Tercihler (herkes görür) ─────────────────────────── */}
+      <div className="section-hd">Kişisel Tercihler</div>
       <div className="s-card">
-        <Row icon={I.save} label="Hızlı Okutma Modu" sub="Barkod gelir, direkt kaydolur, tekrar okutmaya hazır olur. Duplicate bulursa sadece uyarı verir."><Toggle value={settings.autoSave} onChange={v => {
-          set("autoSave", v);
-          // If autoSave is enabled, disable addDetailAfterScan to prevent conflict
-          if (v && settings.addDetailAfterScan) {
-            set("addDetailAfterScan", false);
-          }
-        }} /></Row>
-        <Row icon={I.edit} label="Detaylı Giriş Modu" sub="Barkod okutulur, detay ekranı açılır, müşteri/not girilir, kaydedilir."><Toggle value={settings.addDetailAfterScan} onChange={v => {
-          set("addDetailAfterScan", v);
-          // If addDetailAfterScan is enabled, disable autoSave to prevent conflict
-          if (v && settings.autoSave) {
-            set("autoSave", false);
-          }
-        }} /></Row>
-        <Row icon={I.vib} label="Titreşim"><Toggle value={settings.vibration} onChange={v => set("vibration", v)} /></Row>
-        <Row icon={I.bell} label="Bip Sesi"><Toggle value={settings.beep} onChange={v => set("beep", v)} /></Row>
+        <Row icon={I.save} label="Hızlı Okutma Modu" sub="Barkod gelir, direkt kaydolur, tekrar okutmaya hazır olur.">
+          <Toggle value={personal("autoSave", true)} onChange={v => {
+            setPersonal("autoSave", v);
+            if (v && personal("addDetailAfterScan", false)) setPersonal("addDetailAfterScan", false);
+          }} />
+        </Row>
+        <Row icon={I.vib} label="Titreşim"><Toggle value={personal("vibration", true)} onChange={v => setPersonal("vibration", v)} /></Row>
+        <Row icon={I.bell} label="Bip Sesi"><Toggle value={personal("beep", true)} onChange={v => setPersonal("beep", v)} /></Row>
         <Row icon={I.data} label="Son Okutmalar" sub="Aktif vardiyada gösterilecek son kayıt sayısı">
           <select
-            value={String(settings.recentLimit ?? 10)}
-            onChange={e => set('recentLimit', parseInt(e.target.value, 10))}
-            style={{ height: 34, borderRadius: 10, padding: '0 10px', background: 'var(--s2)', color: 'var(--tx)', border: '1.5px solid var(--brd)' }}
+            value={String(personal("recentLimit", 10))}
+            onChange={e => setPersonal("recentLimit", parseInt(e.target.value, 10))}
+            style={{ height: 34, borderRadius: 10, padding: "0 10px", background: "var(--s2)", color: "var(--tx)", border: "1.5px solid var(--brd)" }}
           >
-            {[5,10,20,50,100,200].map(n => <option key={n} value={String(n)}>{n}</option>)}
+            {[5, 10, 20, 50, 100, 200].map(n => <option key={n} value={String(n)}>{n}</option>)}
             <option value="0">Full</option>
           </select>
         </Row>
-        <Row icon={I.barcode} label="Barkod Uzunluk Kontrolü" sub="İlk okutulan barkod uzunluğu ile devam eder, yanlış okumayı önler"><Toggle value={settings.enforceBarcodeLengthMatch} onChange={v => set("enforceBarcodeLengthMatch", v)} /></Row>
       </div>
 
+      {/* ── Genel Ayarlar (sadece admin) ─────────────────────────────── */}
       {isAdmin && <>
+        <div className="section-hd">Genel Ayarlar</div>
+        <div className="s-card">
+          <Row icon={I.edit} label="Detaylı Giriş Modu" sub="Barkod okutulur, detay ekranı açılır, müşteri/not girilir, kaydedilir.">
+            <Toggle value={settings.addDetailAfterScan ?? false} onChange={v => setGlobal("addDetailAfterScan", v)} />
+          </Row>
+          <Row icon={I.barcode} label="Barkod Uzunluk Kontrolü" sub="İlk okutulan barkod uzunluğu ile devam eder, yanlış okumayı önler">
+            <Toggle value={settings.enforceBarcodeLengthMatch ?? true} onChange={v => setGlobal("enforceBarcodeLengthMatch", v)} />
+          </Row>
+        </div>
+
         <div className="section-hd">Güvenlik & İzinler</div>
         <div className="s-card">
-          <Row icon={I.xlsx}  label="Dışa Aktarmaya İzin Ver"><Toggle value={settings.allowExport}     onChange={v => set("allowExport", v)} /></Row>
-          <Row icon={I.upload}  label="İçe Aktarmaya İzin Ver"><Toggle value={settings.allowImport}     onChange={v => set("allowImport", v)} /></Row>
-          <Row icon={I.trash} label="Verileri Temizlemeye İzin Ver"><Toggle value={settings.allowClearData}  onChange={v => set("allowClearData", v)} /></Row>
-          <Row icon={I.plus}  label="Alan Eklemeye İzin Ver"><Toggle value={settings.allowAddField}    onChange={v => set("allowAddField", v)} /></Row>
-          <Row icon={I.edit}  label="Alan Düzenlemeye İzin Ver"><Toggle value={settings.allowEditField}   onChange={v => set("allowEditField", v)} /></Row>
-          <Row icon={I.del}   label="Alan Silmeye İzin Ver"><Toggle value={settings.allowDeleteField}  onChange={v => set("allowDeleteField", v)} /></Row>
+          <Row icon={I.xlsx}   label="Dışa Aktarmaya İzin Ver"><Toggle value={settings.allowExport ?? true}       onChange={v => setGlobal("allowExport", v)} /></Row>
+          <Row icon={I.upload} label="İçe Aktarmaya İzin Ver"><Toggle value={settings.allowImport ?? true}        onChange={v => setGlobal("allowImport", v)} /></Row>
+          <Row icon={I.trash}  label="Verileri Temizlemeye İzin Ver"><Toggle value={settings.allowClearData ?? true}  onChange={v => setGlobal("allowClearData", v)} /></Row>
+          <Row icon={I.plus}   label="Alan Eklemeye İzin Ver"><Toggle value={settings.allowAddField ?? true}      onChange={v => setGlobal("allowAddField", v)} /></Row>
+          <Row icon={I.edit}   label="Alan Düzenlemeye İzin Ver"><Toggle value={settings.allowEditField ?? true}    onChange={v => setGlobal("allowEditField", v)} /></Row>
+          <Row icon={I.del}    label="Alan Silmeye İzin Ver"><Toggle value={settings.allowDeleteField ?? true}   onChange={v => setGlobal("allowDeleteField", v)} /></Row>
         </div>
+
         <div className="section-hd">Veri Temizleme (Aralık)</div>
         <div className="s-card">
           <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -103,6 +158,45 @@ export default function SettingsPage({ settings, setSettings, integration, setIn
         </div>
 
         <div className="section-hd">Entegrasyon</div>
+
+        {/* Kurulum Koduyla Hızlı Kur */}
+        <div className="int-card" style={{ marginBottom: 8 }}>
+          <div className={`int-hd ${setupInputOpen ? "open" : ""}`} onClick={() => setSetupInputOpen(p => !p)}>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(139,92,246,.15)", border: "1.5px solid rgba(139,92,246,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Ic d={I.scan} s={17} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>Kurulum Koduyla Hızlı Kur</div>
+              <div style={{ fontSize: 12, color: "var(--tx2)" }}>Admin cihazından alınan kodu yapıştırarak anında aktif et</div>
+            </div>
+            <Ic d={I.chevD} s={14} />
+          </div>
+          {setupInputOpen && (
+            <div className="int-bd">
+              <div className="info-box inf" style={{ fontSize: 12 }}>
+                Admin cihazındaki Ayarlar → <b>Cihaz Kurulumu</b> bölümünden kodu kopyalayın ve aşağıya yapıştırın.
+              </div>
+              <div>
+                <label className="lbl">Kurulum Kodu</label>
+                <textarea
+                  value={setupInput}
+                  onChange={e => setSetupInput(e.target.value)}
+                  placeholder="eyJ2IjoxLCJ1cmwiOiJodHRwc..."
+                  rows={3}
+                  style={{ width: "100%", borderRadius: 10, padding: "8px 10px", background: "var(--s2)", color: "var(--tx)", border: "1.5px solid var(--brd)", fontSize: 12, fontFamily: "var(--mono)", resize: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <button
+                className="btn btn-ok btn-full"
+                disabled={!setupInput.trim()}
+                onClick={applySetupCode}
+              >
+                <Ic d={I.check} s={15} /> Uygula ve Aktif Et
+              </button>
+            </div>
+          )}
+        </div>
+
         {integration.active && (
           <div style={{ margin: "0 0 10px", padding: "10px 12px", background: "var(--ok2)", border: "1.5px solid var(--ok3)", borderRadius: "var(--r)", fontSize: 12, color: "var(--ok)", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ok)" }} />
@@ -152,7 +246,7 @@ export default function SettingsPage({ settings, setSettings, integration, setIn
                 <b>1.</b> Google E-Tablolar'da yeni tablo aç<br />
                 <b>2.</b> Uzantılar → Apps Script → şu kodu yapıştır:
                 <textarea readOnly rows={20} style={{ marginTop: 8, fontSize: 10, fontFamily: "var(--mono)", background: "rgba(0,0,0,.3)", border: "1px solid var(--brd)", borderRadius: "var(--r)", padding: 8, color: "var(--tx)" }}
-                  value={`const SHEET_ID = "BURAYA_SHEET_ID_YAPI\u015ATIR";\n\nfunction doPost(e) {\n  const d = JSON.parse(e.postData.contents);\n  const ss = SpreadsheetApp.openById(SHEET_ID);\n  const sh = ss.getSheetByName("Taramalar") || ss.insertSheet("Taramalar");\n\n  // DELETE işlemi\n  if (d.action === "delete" && d.id) {\n    const lastRow = sh.getLastRow();\n    if (lastRow > 1) {\n      const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();\n      const rowIndex = ids.indexOf(d.id);\n      if (rowIndex !== -1) {\n        sh.deleteRow(rowIndex + 2); // +2: header + 0-indexed\n        return ContentService.createTextOutput("DELETED");\n      }\n    }\n    return ContentService.createTextOutput("NOT_FOUND");\n  }\n\n  // CREATE / UPDATE (upsert) işlemi\n  // d.row[0] = record id; d.row[1..] = barcode, fields, customer, ...\n  // d.headers = ["Barkod", fields..., "Müşteri", ...] (id not included - added below)\n  \n  // İlk satır: başlık ekle\n  if (sh.getLastRow() === 0) {\n    sh.appendRow(["id", ...d.headers]);\n  } else {\n    // Başlık güncelleme: yeni alanlar eklenmiş olabilir\n    const currentHeaders = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];\n    const newHeaders = ["id", ...d.headers];\n    if (newHeaders.length > currentHeaders.length) {\n      // Yeni kolonlar ekle\n      for (let i = currentHeaders.length; i < newHeaders.length; i++) {\n        sh.getRange(1, i + 1).setValue(newHeaders[i]);\n      }\n    }\n  }\n\n  // ID kontrolü: varsa güncelle, yoksa ekle\n  const lastRow = sh.getLastRow();\n  if (lastRow > 1) {\n    const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();\n    const rowIndex = ids.indexOf(d.row[0]);\n    if (rowIndex !== -1) {\n      // UPDATE: mevcut satırı güncelle\n      const targetRow = rowIndex + 2; // +2: header + 0-indexed\n      for (let i = 0; i < d.row.length; i++) {\n        sh.getRange(targetRow, i + 1).setValue(d.row[i]);\n      }\n      return ContentService.createTextOutput("UPDATED");\n    }\n  }\n\n  // CREATE: yeni satır ekle\n  sh.appendRow(d.row);\n  return ContentService.createTextOutput("CREATED");\n}`} />
+                  value={`const SHEET_ID = "BURAYA_SHEET_ID_YAPI\u015ATIR";\n\nfunction doPost(e) {\n  const d = JSON.parse(e.postData.contents);\n  const ss = SpreadsheetApp.openById(SHEET_ID);\n  const sh = ss.getSheetByName("Taramalar") || ss.insertSheet("Taramalar");\n\n  // DELETE işlemi\n  if (d.action === "delete" && d.id) {\n    const lastRow = sh.getLastRow();\n    if (lastRow > 1) {\n      const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();\n      const rowIndex = ids.indexOf(d.id);\n      if (rowIndex !== -1) {\n        sh.deleteRow(rowIndex + 2); // +2: header + 0-indexed\n        return ContentService.createTextOutput("DELETED");\n      }\n    }\n    return ContentService.createTextOutput("NOT_FOUND");\n  }\n\n  // CREATE / UPDATE (upsert) işlemi\n  if (sh.getLastRow() === 0) {\n    sh.appendRow(["id", ...d.headers]);\n  } else {\n    const currentHeaders = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];\n    const newHeaders = ["id", ...d.headers];\n    if (newHeaders.length > currentHeaders.length) {\n      for (let i = currentHeaders.length; i < newHeaders.length; i++) {\n        sh.getRange(1, i + 1).setValue(newHeaders[i]);\n      }\n    }\n  }\n\n  const lastRow = sh.getLastRow();\n  if (lastRow > 1) {\n    const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();\n    const rowIndex = ids.indexOf(d.row[0]);\n    if (rowIndex !== -1) {\n      const targetRow = rowIndex + 2;\n      for (let i = 0; i < d.row.length; i++) {\n        sh.getRange(targetRow, i + 1).setValue(d.row[i]);\n      }\n      return ContentService.createTextOutput("UPDATED");\n    }\n  }\n\n  sh.appendRow(d.row);\n  return ContentService.createTextOutput("CREATED");\n}`} />
                 <b>3.</b> Dağıt → Web uygulaması → Erişim: <b>Herkes</b><br />
                 <b>4.</b> Oluşan URL'yi aşağıya yapıştır
               </div>
@@ -162,7 +256,62 @@ export default function SettingsPage({ settings, setSettings, integration, setIn
           )}
         </div>
 
-        {settings.allowClearData && (
+        {/* Cihaz Kurulumu — QR kod + kurulum kodu paylaşımı */}
+        {integration.active && integration.type === "postgres_api" && (
+          <>
+            <div className="section-hd">Cihaz Kurulumu</div>
+            <div className="int-card">
+              <div className={`int-hd ${deviceSetupOpen ? "open" : ""}`} onClick={() => setDeviceSetupOpen(p => !p)}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(139,92,246,.15)", border: "1.5px solid rgba(139,92,246,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Ic d={I.scan} s={17} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>Yeni Cihaz Ekle</div>
+                  <div style={{ fontSize: 12, color: "var(--tx2)" }}>QR kod veya kurulum koduyla diğer cihazları hızlıca yapılandır</div>
+                </div>
+                <Ic d={I.chevD} s={14} />
+              </div>
+              {deviceSetupOpen && (
+                <div className="int-bd">
+                  <div className="info-box inf" style={{ fontSize: 12 }}>
+                    Bu QR kodu diğer cihazda taratın <b>ya da</b> kurulum kodunu kopyalayıp diğer cihazda Ayarlar → Entegrasyon → <b>"Kurulum Koduyla Hızlı Kur"</b> bölümüne yapıştırın.
+                  </div>
+                  {qrDataUrl && (
+                    <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
+                      <img src={qrDataUrl} alt="Kurulum QR" style={{ borderRadius: 8, border: "1.5px solid var(--brd)" }} />
+                    </div>
+                  )}
+                  {setupCode && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <label className="lbl">Kurulum Kodu</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{
+                          flex: 1, padding: "8px 10px", background: "var(--s2)",
+                          border: "1.5px solid var(--brd)", borderRadius: 10,
+                          fontSize: 11, fontFamily: "var(--mono)", color: "var(--tx2)",
+                          wordBreak: "break-all", lineHeight: 1.5,
+                        }}>{setupCode}</div>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ flexShrink: 0, alignSelf: "flex-start", padding: "8px 12px" }}
+                          onClick={() => {
+                            navigator.clipboard?.writeText(setupCode)
+                              .then(() => toast("Kod kopyalandı"))
+                              .catch(() => toast("Kopyalanamadı", "var(--err)"));
+                          }}
+                        >
+                          Kopyala
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {(settings.allowClearData ?? true) && (
           <>
             <div className="section-hd">Veri</div>
             <div className="s-card">
