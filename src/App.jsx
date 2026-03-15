@@ -253,8 +253,10 @@ export default function App() {
           if (serverUsers.status === "fulfilled" && Array.isArray(serverUsers.value) && serverUsers.value.length) {
             const su = serverUsers.value;
             // Sadece local'de olan kullanıcıları koru (offline oluşturulmuş olabilir)
+            // Hem ID hem username kontrolü: sunucuda aynı username varsa sunucu kazanır
             const serverById = Object.fromEntries(su.map(u => [u.id, u]));
-            const localOnly = loadedUsers.filter(u => !serverById[u.id]);
+            const serverByUsername = Object.fromEntries(su.map(u => [u.username, u]));
+            const localOnly = loadedUsers.filter(u => !serverById[u.id] && !serverByUsername[u.username]);
             const merged = [...su, ...localOnly];
             const hasAdmin = merged.some(u => u.username === "admin");
             setUsers(hasAdmin ? merged : [INITIAL_USERS[0], ...merged]);
