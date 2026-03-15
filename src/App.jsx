@@ -80,6 +80,17 @@ export default function App() {
     pushServerUsers(int.postgresApi, updatedUsers).catch(() => {});
   }, []);
 
+  // İnternet gelince local kullanıcı listesini sunucuya push et
+  useEffect(() => {
+    const handleOnline = () => {
+      const int = integrationRef.current;
+      if (!int.active || int.type !== "postgres_api") return;
+      pushServerUsers(int.postgresApi, usersRef.current).catch(() => {});
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, []);
+
   const addShiftDate = useCallback((rec) => {
     if (!rec) return rec;
     const shiftDate = deriveShiftDate(rec);
@@ -241,8 +252,16 @@ export default function App() {
 
           if (serverUsers.status === "fulfilled" && Array.isArray(serverUsers.value) && serverUsers.value.length) {
             const su = serverUsers.value;
-            const hasAdmin = su.some(u => u.username === "admin");
-            setUsers(hasAdmin ? su : [INITIAL_USERS[0], ...su]);
+            // Sadece local'de olan kullanıcıları koru (offline oluşturulmuş olabilir)
+            const serverById = Object.fromEntries(su.map(u => [u.id, u]));
+            const localOnly = loadedUsers.filter(u => !serverById[u.id]);
+            const merged = [...su, ...localOnly];
+            const hasAdmin = merged.some(u => u.username === "admin");
+            setUsers(hasAdmin ? merged : [INITIAL_USERS[0], ...merged]);
+            // Sunucuda eksik kullanıcılar varsa geri push et
+            if (localOnly.length > 0) {
+              pushServerUsers(finalIntegration.postgresApi, hasAdmin ? merged : [INITIAL_USERS[0], ...merged]).catch(() => {});
+            }
           }
 
           if (serverConfig.status === "fulfilled" && serverConfig.value) {
