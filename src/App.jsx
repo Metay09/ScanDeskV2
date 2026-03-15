@@ -384,8 +384,8 @@ export default function App() {
   }, [records]);
 
   // Android geri tuşu
-  const { syncRefs: syncBackButtonRefs } = useBackButton(setPage, setShowExitConfirm);
-  useEffect(() => { syncBackButtonRefs(page, showExitConfirm); });
+  const { syncRefs: syncBackButtonRefs, backPressCountRef } = useBackButton(setPage, setShowExitConfirm);
+  useEffect(() => { syncBackButtonRefs(page, showExitConfirm); }, [page, showExitConfirm]);
 
   const visibleRecordsCount = useMemo(() => {
     if (isAdmin) return records.length;

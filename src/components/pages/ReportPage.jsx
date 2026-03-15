@@ -11,7 +11,7 @@ const PALETTE = [
 ];
 
 // ── SVG Pasta Grafik ──────────────────────────────────────────────────────────
-function PieChart({ data, size = 186 }) {
+function PieChart({ data = [], size = 186 }) {
   const [hovered, setHovered] = useState(null);
 
   const total = data.reduce((s, d) => s + d.value, 0);
