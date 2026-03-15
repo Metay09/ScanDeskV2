@@ -1,7 +1,13 @@
 services:
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # VITE_ değişkenleri React build'ine gömülür.
+        # VITE_API_KEY tanımlı değilse API_KEY değeri kullanılır.
+        VITE_SERVER_URL: ${VITE_SERVER_URL:-}
+        VITE_API_KEY: ${VITE_API_KEY:-${API_KEY}}
     ports:
       - "${PORT:-3000}:3000"
     environment:
