@@ -61,5 +61,5 @@ export function useBackButton(setPage, setShowExitConfirm) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { syncRefs };
+  return { syncRefs, backPressCountRef };
 }
