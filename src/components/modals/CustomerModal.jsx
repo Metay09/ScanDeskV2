@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Ic, I } from "./Icon";
-import Modal from "./Modal";
+import { Ic, I } from "../ui/Icon";
+import Modal from "../ui/Modal";
 
 const DEFAULT_CUSTOMER = "-Boş-";
 

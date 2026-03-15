@@ -13,14 +13,14 @@ import { sheetsDelete, sheetsDeleteBulk, postgresApiInsert, postgresApiUpdate, p
 import { createQueueItem, addToQueue, removeFromQueue, getRetryableItems, markAsProcessing, markAsFailed } from "./services/syncQueue";
 import { toDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
-import { Ic, I } from "./components/Icon";
-import Login from "./components/Login";
-import ScanPage from "./components/ScanPage";
-import DataPage from "./components/DataPage";
-import ReportPage from "./components/ReportPage";
-import FieldsPage from "./components/FieldsPage";
-import UsersPage from "./components/UsersPage";
-import SettingsPage from "./components/SettingsPage";
+import { Ic, I } from "./components/ui/Icon";
+import Login from "./components/pages/Login";
+import ScanPage from "./components/pages/ScanPage";
+import DataPage from "./components/pages/DataPage";
+import ReportPage from "./components/pages/ReportPage";
+import FieldsPage from "./components/pages/FieldsPage";
+import UsersPage from "./components/pages/UsersPage";
+import SettingsPage from "./components/pages/SettingsPage";
 
 const GRACE_PERIOD_SECS = 300; // 5 dakika
 

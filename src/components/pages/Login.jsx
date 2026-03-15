@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Ic, I } from "./Icon";
-import PasswordInput from "./PasswordInput";
-import { hashPassword, verifyPassword } from "../utils";
+import { Ic, I } from "../ui/Icon";
+import PasswordInput from "../ui/PasswordInput";
+import { hashPassword, verifyPassword } from "../../utils";
 
 export default function Login({ users, onLogin, onMigratePassword, logoutReason }) {
   const [u, setU] = useState("");

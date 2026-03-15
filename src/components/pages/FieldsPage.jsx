@@ -1,5 +1,5 @@
-import { Ic, I } from "./Icon";
-import { genId, FIELD_TYPES } from "../constants";
+import { Ic, I } from "../ui/Icon";
+import { genId, FIELD_TYPES } from "../../constants";
 
 export default function FieldsPage({ fields, setFields, isAdmin, settings }) {
   if (!isAdmin) return (

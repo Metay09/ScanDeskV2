@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { Ic, I } from "./Icon";
-import { FIXED_SHIFTS, toggleSetMember, getShiftDate, deriveShiftDate } from "../utils";
-import Modal from "./Modal";
+import { Ic, I } from "../ui/Icon";
+import { FIXED_SHIFTS, toggleSetMember, getShiftDate, deriveShiftDate } from "../../utils";
+import Modal from "../ui/Modal";
 
 export default function ShiftInheritModal({ currentShift, currentUser, records, onCopy, onClose }) {
   const today = getShiftDate();

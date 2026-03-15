@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Ic, I } from "./Icon";
-import Toggle from "./Toggle";
-import PasswordInput from "./PasswordInput";
+import { Ic, I } from "../ui/Icon";
+import Toggle from "../ui/Toggle";
+import PasswordInput from "../ui/PasswordInput";
 
 export default function SettingsPage({ settings, setSettings, integration, setIntegration, isAdmin, onClearData, onDeleteRange, records, toast, user, onLogout, theme, onToggleTheme }) {
   const set = (k, v) => setSettings(p => ({ ...p, [k]: v }));

@@ -1,4 +1,4 @@
-import { Ic, I } from "./Icon";
+import { Ic, I } from "../ui/Icon";
 
 export default function ShiftTakeoverPrompt({ shift, onTakeover, onCancel }) {
   return (

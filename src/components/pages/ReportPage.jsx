@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Ic, I } from "./Icon";
-import { FIXED_SHIFTS, getShiftDate, deriveShiftDate } from "../utils";
-import { getDynamicFieldValue } from "../services/recordModel";
+import { Ic, I } from "../ui/Icon";
+import { FIXED_SHIFTS, getShiftDate, deriveShiftDate } from "../../utils";
+import { getDynamicFieldValue } from "../../services/recordModel";
 
 // ── Renk paleti ──────────────────────────────────────────────────────────────
 const PALETTE = [
