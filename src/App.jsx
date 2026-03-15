@@ -1,8 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import * as XLSX from "xlsx";
-
 import "./index.css";
 import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_USER_SETTINGS } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
@@ -748,6 +746,7 @@ export default function App() {
     });
     if (type === "xlsx") {
       try {
+        const XLSX = await import("xlsx");
         const ws = XLSX.utils.aoa_to_sheet([hdr, ...data]);
         ws["!cols"] = hdr.map(() => ({ wch: 20 }));
         const wb = XLSX.utils.book_new();
