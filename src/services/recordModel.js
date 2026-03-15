@@ -14,6 +14,7 @@ export const FIXED_FIELDS = [
   'barcode',
   'timestamp',
   'shift',
+  'shiftDate',
   'customer',
   'aciklama',
   'scanned_by',
@@ -38,6 +39,7 @@ const LEGACY_DYNAMIC_FIELDS = ['qty', 'note'];
 // barcode                   →  barcode
 // timestamp                 →  timestamp
 // shift                     →  shift
+// shiftDate                 →  shift_date
 // customer                  →  customer
 // aciklama                  →  aciklama
 // scanned_by                →  scanned_by
@@ -53,6 +55,7 @@ const FIELD_TO_DB_MAPPING = {
   'barcode': 'barcode',
   'timestamp': 'timestamp',
   'shift': 'shift',
+  'shiftDate': 'shift_date',
   'customer': 'customer',
   'aciklama': 'aciklama',
   'scanned_by': 'scanned_by',

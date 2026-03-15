@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS taramalar (
   source              TEXT        DEFAULT 'scan',
   source_record_id    TEXT        DEFAULT '',
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  custom_fields       JSONB       DEFAULT '{}'::JSONB
+  custom_fields       JSONB       DEFAULT '{}'::JSONB,
+  -- Vardiya iş tarihi (gece yarısı geçen vardiyalar için timestamp'ten farklı olabilir)
+  shift_date          DATE        DEFAULT NULL,
+  -- Vardiya devir kaydı için kaynak vardiya etiketi (source='shift_takeover' ise dolu)
+  inherited_from_shift TEXT       DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_taramalar_shift_ts  ON taramalar(shift, timestamp DESC);

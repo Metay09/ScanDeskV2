@@ -46,7 +46,7 @@ app.get("/api/taramalar", requireApiKey, async (req, res) => {
     const params = [];
     const conds = [];
     if (shift)      { params.push(shift);      conds.push(`shift = $${params.length}`); }
-    if (shift_date) { params.push(shift_date); conds.push(`DATE(timestamp) = $${params.length}`); }
+    if (shift_date) { params.push(shift_date); conds.push(`shift_date = $${params.length}`); }
     if (conds.length) query += " WHERE " + conds.join(" AND ");
     query += ` ORDER BY timestamp DESC LIMIT $${params.length + 1}`;
     params.push(Number(limit));
@@ -63,13 +63,14 @@ app.post("/api/taramalar", requireApiKey, async (req, res) => {
     const r = req.body;
     await pool.query(
       `INSERT INTO taramalar
-         (id, barcode, timestamp, shift, customer, aciklama,
+         (id, barcode, timestamp, shift, shift_date, customer, aciklama,
           scanned_by, scanned_by_username, sync_status, sync_error,
           source, source_record_id, updated_at, custom_fields)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
        ON CONFLICT (id) DO NOTHING`,
       [
         r.id, r.barcode, r.timestamp || new Date(), r.shift,
+        r.shift_date || null,
         r.customer || "", r.aciklama || "",
         r.scanned_by, r.scanned_by_username,
         r.sync_status || "synced", r.sync_error || "",
@@ -90,14 +91,15 @@ app.patch("/api/taramalar/:id", requireApiKey, async (req, res) => {
     const r = req.body;
     await pool.query(
       `UPDATE taramalar SET
-         barcode=$1, shift=$2, customer=$3, aciklama=$4,
-         scanned_by=$5, scanned_by_username=$6,
-         sync_status=$7, sync_error=$8, source=$9,
-         source_record_id=$10, updated_at=$11,
-         custom_fields=$12::jsonb
-       WHERE id=$13`,
+         barcode=$1, shift=$2, shift_date=$3, customer=$4, aciklama=$5,
+         scanned_by=$6, scanned_by_username=$7,
+         sync_status=$8, sync_error=$9, source=$10,
+         source_record_id=$11, updated_at=$12,
+         custom_fields=$13::jsonb
+       WHERE id=$14`,
       [
-        r.barcode, r.shift, r.customer || "", r.aciklama || "",
+        r.barcode, r.shift, r.shift_date || null,
+        r.customer || "", r.aciklama || "",
         r.scanned_by, r.scanned_by_username,
         r.sync_status || "synced", r.sync_error || "",
         r.source || "scan", r.source_record_id || "",
