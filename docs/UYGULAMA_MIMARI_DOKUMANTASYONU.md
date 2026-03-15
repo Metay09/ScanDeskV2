@@ -82,25 +82,36 @@ scandesk-project/
 │   ├── constants.js               # Initial data, config constants
 │   ├── utils.js                   # Pure functions (date, crypto, etc.)
 │   │
-│   ├── components/                # React components
-│   │   ├── ScanPage.jsx           # Barkod tarama ana sayfası
-│   │   ├── DataPage.jsx           # Kayıtları görüntüleme/filtreleme
-│   │   ├── ReportPage.jsx         # Raporlama ve grafikler
-│   │   ├── FieldsPage.jsx         # Dinamik alan yönetimi
-│   │   ├── UsersPage.jsx          # Kullanıcı CRUD (admin only)
-│   │   ├── SettingsPage.jsx       # Ayarlar ve entegrasyon config
-│   │   ├── Login.jsx              # Giriş ekranı
-│   │   ├── EditRecordModal.jsx    # Kayıt düzenleme modal
-│   │   ├── CustomerPicker.jsx     # Müşteri seçimi button
-│   │   ├── CustomerModal.jsx      # Müşteri ekleme/silme modal
-│   │   ├── ShiftInheritModal.jsx  # Vardiya devralma modal
-│   │   ├── ShiftTakeoverPrompt.jsx# Vardiya başlangıç prompt
-│   │   ├── FieldInput.jsx         # Dinamik form input wrapper
-│   │   ├── Icon.jsx               # SVG icon system
-│   │   ├── Modal.jsx              # Reusable modal component
-│   │   ├── Toggle.jsx             # Toggle switch component
-│   │   ├── ErrorBoundary.jsx      # React error boundary
-│   │   └── ...
+│   ├── components/
+│   │   ├── pages/                 # Tam ekran sayfa bileşenleri
+│   │   │   ├── ScanPage.jsx       # Barkod tarama ana sayfası
+│   │   │   ├── DataPage.jsx       # Kayıtları görüntüleme/filtreleme
+│   │   │   ├── ReportPage.jsx     # Raporlama ve grafikler
+│   │   │   ├── FieldsPage.jsx     # Dinamik alan yönetimi
+│   │   │   ├── UsersPage.jsx      # Kullanıcı CRUD (admin only)
+│   │   │   ├── SettingsPage.jsx   # Ayarlar ve entegrasyon config
+│   │   │   └── Login.jsx          # Giriş ekranı
+│   │   │
+│   │   ├── modals/                # Açılır pencere bileşenleri
+│   │   │   ├── EditRecordModal.jsx    # Kayıt düzenleme
+│   │   │   ├── CustomerModal.jsx      # Müşteri ekleme/silme
+│   │   │   ├── ShiftInheritModal.jsx  # Vardiya devralma
+│   │   │   ├── ShiftTakeoverPrompt.jsx# Vardiya başlangıç prompt
+│   │   │   ├── AciklamaModal.jsx      # Açıklama seçimi
+│   │   │   └── DetailFormModal.jsx    # Detay form modal
+│   │   │
+│   │   ├── ui/                    # Atomik, tekrar kullanılabilir UI parçaları
+│   │   │   ├── Icon.jsx           # SVG icon system
+│   │   │   ├── Modal.jsx          # Reusable modal wrapper
+│   │   │   ├── Toggle.jsx         # Toggle switch
+│   │   │   ├── ErrorBoundary.jsx  # React error boundary
+│   │   │   ├── PasswordInput.jsx  # Şifre input (göster/gizle)
+│   │   │   └── SelectInput.jsx    # Select dropdown
+│   │   │
+│   │   └── shared/                # Birden fazla sayfada kullanılan widget'lar
+│   │       ├── CustomerPicker.jsx # Müşteri seçimi widget
+│   │       ├── AciklamaPicker.jsx # Açıklama seçimi widget
+│   │       └── FieldInput.jsx     # Dinamik form input wrapper
 │   │
 │   ├── services/
 │   │   ├── storage.js             # LocalStorage/Preferences abstraction
@@ -112,6 +123,7 @@ scandesk-project/
 │       ├── useToast.js            # Toast notification hook
 │       └── useFormState.js        # Form state management hook
 │
+├── docs/                          # Proje dokümantasyonu
 ├── capacitor.config.json          # Capacitor native configuration
 ├── vite.config.js                 # Vite build configuration
 └── package.json                   # Dependencies
@@ -207,7 +219,7 @@ const normalizeRecords = (list) => {
 
 ### 5.1 ZXing Kütüphanesi Entegrasyonu
 
-**Dosya:** `src/components/ScanPage.jsx`
+**Dosya:** `src/components/pages/ScanPage.jsx`
 
 ```javascript
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -990,7 +1002,7 @@ const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
 ### 12.3 Icon System
 
-**Dosya:** `src/components/Icon.jsx`
+**Dosya:** `src/components/ui/Icon.jsx`
 
 ```javascript
 // SVG path definitions
@@ -1189,5 +1201,5 @@ const filtered = visibleRecords.filter(r => {
 ---
 
 **Hazırlayan:** Claude (Anthropic AI)
-**Tarih:** 2025-01-15
-**Versiyon:** 1.0.0
+**Tarih:** 2026-03-15
+**Versiyon:** 1.1.0

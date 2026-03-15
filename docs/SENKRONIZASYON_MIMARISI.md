@@ -44,7 +44,7 @@ Sistem **"Offline-First"** prensibine dayanır:
 
 ## 1. Kayıt Oluşturma Akışı (Tarama)
 
-> `ScanPage.jsx:294-353`
+> `src/components/pages/ScanPage.jsx:294-353`
 
 ```
 Barkod okutulur
@@ -148,7 +148,7 @@ Tarihe göre filtrelenen kayıtlar local'den silinir
 
 ## 5. Import Akışı
 
-> `App.jsx:723-775`, `DataPage.jsx:108-151`
+> `App.jsx:723-775`, `src/components/pages/DataPage.jsx:108-151`
 
 ```
 Dosya seçilir (Excel / CSV)
@@ -176,7 +176,7 @@ handleImport() → App.jsx
 
 ## 6. Vardiya Devir Akışı
 
-> `ScanPage.jsx:406-419`
+> `src/components/pages/ScanPage.jsx:406-419`
 
 ```
 Başka vardiyadan kayıt kopyalanır
