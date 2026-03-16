@@ -228,7 +228,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
     : records.filter(r =>
         r.scanned_by_username === user?.username &&
         r.shift === currentShift &&
-        deriveShiftDate(r) === (selectedDate || currentShiftDate)
+        deriveShiftDate(r) === currentShiftDate
       );
   const filtered = visibleRecords.filter(r => {
     if (!q) return true;
@@ -361,13 +361,15 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
             <Ic d={I.group} s={15} /> {grouped ? "Gruplu" : "Liste"}
           </button>
 
-          {/* Tarih filtresi - hem admin hem kullanıcı */}
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
-          />
+          {/* Admin: Tarih filtresi */}
+          {isAdmin && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+            />
+          )}
 
           {/* Admin: Vardiya filtresi */}
           {isAdmin && (
