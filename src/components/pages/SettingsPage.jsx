@@ -43,17 +43,9 @@ export default function SettingsPage({
       {/* ── Kişisel Tercihler (herkes görür) ─────────────────────────── */}
       <div className="section-hd">Kişisel Tercihler</div>
       <div className="s-card">
-        <Row icon={I.save} label="Hızlı Okutma Modu" sub="Barkod gelir, direkt kaydolur, tekrar okutmaya hazır olur.">
-          <Toggle value={personal("autoSave", true)} onChange={v => {
-            setPersonal("autoSave", v);
-            if (v && personal("addDetailAfterScan", false)) setPersonal("addDetailAfterScan", false);
-          }} />
+        <Row icon={I.save} label="Hızlı Okutma Modu" sub="Açık: barkod gelir, direkt kaydolur. Kapalı: barkod okutulur, detay ekranı açılır.">
+          <Toggle value={personal("autoSave", true)} onChange={v => setPersonal("autoSave", v)} />
         </Row>
-        {personal("autoSave", true) && (
-          <Row icon={I.edit} label="Detaylı Giriş Modu" sub="Barkod okutulur, detay ekranı açılır, müşteri/not girilir, kaydedilir.">
-            <Toggle value={personal("addDetailAfterScan", false)} onChange={v => setPersonal("addDetailAfterScan", v)} />
-          </Row>
-        )}
         <Row icon={I.vib} label="Titreşim"><Toggle value={personal("vibration", true)} onChange={v => setPersonal("vibration", v)} /></Row>
         <Row icon={I.bell} label="Bip Sesi"><Toggle value={personal("beep", true)} onChange={v => setPersonal("beep", v)} /></Row>
         <Row icon={I.data} label="Son Okutmalar" sub="Aktif vardiyada gösterilecek son kayıt sayısı">

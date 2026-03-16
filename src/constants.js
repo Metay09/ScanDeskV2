@@ -33,7 +33,6 @@ export const DEFAULT_POSTGRES_ACTIVE =
 
 // Admin (global) ayarlar — sadece admin değiştirebilir, tüm cihazlara uygulanır
 export const INITIAL_SETTINGS = {
-  addDetailAfterScan: false,
   allowExport: true,
   allowImport: true,
   allowClearData: true,
