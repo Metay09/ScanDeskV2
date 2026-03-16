@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } fr
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import "./index.css";
-import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_USER_SETTINGS, DEFAULT_POSTGRES_ACTIVE } from "./constants";
+import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_GSHEETS_ACTIVE, DEFAULT_USER_SETTINGS, DEFAULT_POSTGRES_ACTIVE } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
@@ -34,7 +34,7 @@ export default function App() {
   const [settings, setSettings]   = useState(INITIAL_SETTINGS);
   const [integration, setIntegration] = useState({
     postgresApi: { active: DEFAULT_POSTGRES_ACTIVE, serverUrl: DEFAULT_POSTGRES_URL, apiKey: DEFAULT_POSTGRES_KEY },
-    gsheets:     { active: false, scriptUrl: DEFAULT_GSHEETS_URL },
+    gsheets:     { active: DEFAULT_GSHEETS_ACTIVE, scriptUrl: DEFAULT_GSHEETS_URL },
   });
   const [hydrated, setHydrated] = useState(false);
   const [theme, setTheme] = useState("dark");
@@ -189,21 +189,23 @@ export default function App() {
           const gsActive = (old.active && old.type === "gsheets") ? true : (old.gsheets?.active ?? false);
           const pgUrl    = old.postgresApi?.serverUrl || old.supabase?.url || DEFAULT_POSTGRES_URL;
           const pgKey    = old.postgresApi?.apiKey    || old.supabase?.key || DEFAULT_POSTGRES_KEY;
+          const gsUrl = old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL;
           migratedIntegration = {
             postgresApi: { active: pgActive, serverUrl: pgUrl, apiKey: pgKey },
-            gsheets:     { active: gsActive, scriptUrl: old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL },
+            gsheets:     { active: DEFAULT_GSHEETS_ACTIVE ? true : gsActive, scriptUrl: gsUrl },
           };
         } else {
           // Yeni format — eksik alanları tamamla
+          const gsUrl = old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL;
           migratedIntegration = {
             postgresApi: {
-              active:    old.postgresApi?.active    ?? false,
+              active:    DEFAULT_POSTGRES_ACTIVE ? true : (old.postgresApi?.active ?? false),
               serverUrl: old.postgresApi?.serverUrl || DEFAULT_POSTGRES_URL,
               apiKey:    old.postgresApi?.apiKey    || DEFAULT_POSTGRES_KEY,
             },
             gsheets: {
-              active:    old.gsheets?.active    ?? false,
-              scriptUrl: old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL,
+              active:    DEFAULT_GSHEETS_ACTIVE ? true : (old.gsheets?.active ?? false),
+              scriptUrl: gsUrl,
             },
           };
         }
