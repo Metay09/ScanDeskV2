@@ -529,88 +529,67 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
         )}
       </div>
 
-      {/* ── Filtre Paneli ───────────────────────────────────── */}
-      <Panel>
-        <SectionTitle>Filtreler</SectionTitle>
+      {/* ── Filtre Toolbar ──────────────────────────────────── */}
+      <div style={{ marginBottom: 14 }}>
 
         {/* Tarih aralığı — yalnızca admin */}
         {isAdmin && (
           <div style={{
             display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: 10, marginBottom: 10,
+            gap: 8, marginBottom: 8,
           }}>
-            <div>
-              <label className="lbl">Başlangıç Tarihi</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                style={{ height: 42 }}
-              />
-            </div>
-            <div>
-              <label className="lbl">Bitiş Tarihi</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                style={{ height: 42 }}
-              />
-            </div>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              style={{ height: 38 }}
+              title="Başlangıç Tarihi"
+            />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              style={{ height: 38 }}
+              title="Bitiş Tarihi"
+            />
           </div>
         )}
 
-        {/* Vardiya seçimi — yalnızca admin */}
-        {isAdmin && (
-          <div style={{ marginBottom: 10 }}>
-            <label className="lbl">Vardiya</label>
-            <div style={{ display: "flex", gap: 6 }}>
-              {FIXED_SHIFTS.map(s => {
-                const active = selectedShifts.includes(s.label);
-                return (
-                  <button
-                    key={s.label}
-                    type="button"
-                    onClick={() => toggleShift(s.label)}
-                    style={{
-                      flex: 1, height: 38, borderRadius: "var(--r)",
-                      border: "1.5px solid " + (active ? "var(--inf3)" : "var(--brd)"),
-                      background: active ? "var(--inf2)" : "var(--s2)",
-                      color: active ? "var(--inf)" : "var(--tx2)",
-                      fontFamily: "var(--font)", fontSize: 13, fontWeight: 700,
-                      cursor: "pointer", transition: ".1s",
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* Filtre satırı: Vardiya + Müşteri + Açıklama */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
 
-        {/* Müşteri + Açıklama */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-          marginBottom: dynamicFields.length > 0 ? 10 : 0,
-        }}>
-          <div>
-            <label className="lbl">Müşteri</label>
+          {/* Vardiya — yalnızca admin */}
+          {isAdmin && FIXED_SHIFTS.map(s => {
+            const active = selectedShifts.includes(s.label);
+            return (
+              <button
+                key={s.label}
+                type="button"
+                className={`btn btn-sm ${active ? "btn-info" : "btn-ghost"}`}
+                onClick={() => toggleShift(s.label)}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+
+          {/* Müşteri */}
+          <div style={{ flex: 1, minWidth: 130 }}>
             <MultiSelect
               options={customerOptions}
               value={selectedCustomers}
               onChange={setSelectedCustomers}
-              placeholder="Tümü"
+              placeholder="Müşteri"
             />
           </div>
-          <div>
-            <label className="lbl">Açıklama</label>
+
+          {/* Açıklama */}
+          <div style={{ flex: 1, minWidth: 130 }}>
             <MultiSelect
               options={aciklamaOptions}
               value={selectedAciklamalar}
               onChange={setSelectedAciklamalar}
-              placeholder="Tümü"
+              placeholder="Açıklama"
             />
           </div>
         </div>
@@ -618,111 +597,92 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
         {/* Dinamik alan filtreleri */}
         {dynamicFields.length > 0 && (
           <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-            gap: 10,
+            display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8,
           }}>
             {/* Metin alanları → arama */}
             {textFields.map(f => (
-              <div key={f.id}>
-                <label className="lbl">{f.label}</label>
+              <div key={f.id} style={{ flex: "1 1 140px", minWidth: 130 }}>
                 <input
                   type="text"
-                  placeholder="Ara..."
+                  placeholder={f.label + "…"}
                   value={dynFilters[f.id] || ""}
                   onChange={e => updateDynFilter(f.id, e.target.value)}
-                  style={{ height: 42 }}
+                  style={{ height: 38 }}
                 />
               </div>
             ))}
 
             {/* Sayı alanları → min/max */}
             {numericFields.map(f => (
-              <div key={f.id}>
-                <label className="lbl">{f.label} (Min / Max)</label>
-                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={dynFilters[f.id]?.min ?? ""}
-                    onChange={e =>
-                      updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), min: e.target.value })
-                    }
-                    style={{ height: 42 }}
-                  />
-                  <span style={{
-                    color: "var(--tx3)", flexShrink: 0,
-                    fontSize: 16, lineHeight: 1,
-                  }}>–</span>
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={dynFilters[f.id]?.max ?? ""}
-                    onChange={e =>
-                      updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), max: e.target.value })
-                    }
-                    style={{ height: 42 }}
-                  />
-                </div>
+              <div key={f.id} style={{ display: "flex", gap: 4, alignItems: "center", flex: "1 1 180px" }}>
+                <input
+                  type="number"
+                  placeholder={f.label + " Min"}
+                  value={dynFilters[f.id]?.min ?? ""}
+                  onChange={e =>
+                    updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), min: e.target.value })
+                  }
+                  style={{ height: 38, flex: 1 }}
+                />
+                <span style={{ color: "var(--tx3)", flexShrink: 0, fontSize: 14 }}>–</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={dynFilters[f.id]?.max ?? ""}
+                  onChange={e =>
+                    updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), max: e.target.value })
+                  }
+                  style={{ height: 38, flex: 1 }}
+                />
               </div>
             ))}
 
             {/* Onay kutusu alanları → Tümü / Evet / Hayır */}
             {checkboxFields.map(f => (
-              <div key={f.id}>
-                <label className="lbl">{f.label}</label>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {[["all", "Tümü"], ["true", "Evet"], ["false", "Hayır"]].map(([v, l]) => {
-                    const active = (dynFilters[f.id] || "all") === v;
-                    return (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => updateDynFilter(f.id, v)}
-                        style={{
-                          flex: 1, height: 38, borderRadius: "var(--r)",
-                          border: "1.5px solid " + (active ? "var(--acc3)" : "var(--brd)"),
-                          background: active ? "var(--acc2)" : "var(--s2)",
-                          color: active ? "var(--acc)" : "var(--tx2)",
-                          fontFamily: "var(--font)", fontSize: 12, fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {l}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div key={f.id} style={{ display: "flex", gap: 4 }}>
+                {[["all", "Tümü"], ["true", "Evet"], ["false", "Hayır"]].map(([v, l]) => {
+                  const active = (dynFilters[f.id] || "all") === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      className={`btn btn-sm ${active ? "btn-info" : "btn-ghost"}`}
+                      onClick={() => updateDynFilter(f.id, v)}
+                      title={f.label}
+                    >
+                      {l}
+                    </button>
+                  );
+                })}
               </div>
             ))}
 
             {/* Tarih alanları → tarih aralığı */}
             {dateFieldsDyn.map(f => (
-              <div key={f.id} style={{ gridColumn: "span 2" }}>
-                <label className="lbl">{f.label} Aralığı</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                  <input
-                    type="date"
-                    value={dynFilters[f.id]?.from || ""}
-                    onChange={e =>
-                      updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), from: e.target.value })
-                    }
-                    style={{ height: 42 }}
-                  />
-                  <input
-                    type="date"
-                    value={dynFilters[f.id]?.to || ""}
-                    onChange={e =>
-                      updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), to: e.target.value })
-                    }
-                    style={{ height: 42 }}
-                  />
-                </div>
+              <div key={f.id} style={{ display: "flex", gap: 4, flex: "1 1 220px" }}>
+                <input
+                  type="date"
+                  value={dynFilters[f.id]?.from || ""}
+                  onChange={e =>
+                    updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), from: e.target.value })
+                  }
+                  style={{ height: 38, flex: 1 }}
+                  title={f.label + " Başlangıç"}
+                />
+                <input
+                  type="date"
+                  value={dynFilters[f.id]?.to || ""}
+                  onChange={e =>
+                    updateDynFilter(f.id, { ...(dynFilters[f.id] || {}), to: e.target.value })
+                  }
+                  style={{ height: 38, flex: 1 }}
+                  title={f.label + " Bitiş"}
+                />
               </div>
             ))}
           </div>
         )}
-      </Panel>
+      </div>
 
       {/* ── Boş durum ──────────────────────────────────────── */}
       {filteredRecords.length === 0 ? (
