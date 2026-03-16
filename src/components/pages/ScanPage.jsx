@@ -88,6 +88,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
   // Admin: vardiya ve tarih seçebilir; normal kullanıcı: saate göre otomatik
   const [adminShift, setAdminShift] = useState(() => getCurrentShift());
   const [adminDate, setAdminDate] = useState(() => fmtDate());
+  const [shiftOpen, setShiftOpen] = useState(false);
   const [userShift, setUserShift] = useState(() => getCurrentShift());
 
   // Update user shift periodically for non-admin users
@@ -455,17 +456,25 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
         </div>
         {isAdmin ? (
           <>
-            <div className="shift-btns">
-              {FIXED_SHIFTS.map(s => (
-                <button
-                  key={s.label}
-                  type="button"
-                  className={`shift-btn${adminShift === s.label ? " active" : ""}`}
-                  onClick={() => setAdminShift(s.label)}
-                >
-                  {s.label}
-                </button>
-              ))}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                className={`btn btn-sm btn-info`}
+                style={{ height: 30, fontSize: 11, fontWeight: 800, padding: "0 10px" }}
+                onClick={() => setShiftOpen(p => !p)}
+              >
+                {adminShift}
+              </button>
+              {shiftOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 110, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
+                  {FIXED_SHIFTS.map(s => (
+                    <div key={s.label} onClick={() => { setAdminShift(s.label); setShiftOpen(false); }}
+                      style={{ padding: "10px 14px", cursor: "pointer", fontWeight: s.label === adminShift ? 700 : 400, color: s.label === adminShift ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                      {s.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <input
               type="date"

@@ -367,7 +367,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
               type="date"
               value={selectedDate}
               onChange={e => setSelectedDate(e.target.value)}
-              style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+              className="shift-date"
             />
           )}
 
