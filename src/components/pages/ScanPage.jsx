@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Ic, I } from "../ui/Icon";
 import { genId } from "../../constants";
 import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../../utils";
-import { postgresApiInsert, sheetsInsert, syncRecordToSheets } from "../../services/integrations";
+import { postgresApiInsert, syncRecordToSheets } from "../../services/integrations";
 import { toDbPayload } from "../../services/recordModel";
 import EditRecordModal from "../modals/EditRecordModal";
 import CustomerPicker from "../shared/CustomerPicker";
@@ -287,11 +287,8 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
         });
     }
     if (integration.gsheets?.active) {
-      const ef = fields.filter(f => f.id !== "barcode");
-      const headers = ["Barkod", ...ef.map(f => f.label), "Müşteri", "Açıklama", "Kaydeden", "Kullanıcı Adı", "Tarih", "Saat"];
-      const rowArr  = [row.id, bc, ...ef.map(f => row.customFields[f.id] ?? ""), row.customer, row.aciklama, row.scanned_by, row.scanned_by_username, now.toLocaleDateString("tr-TR"), now.toLocaleTimeString("tr-TR")];
-      sheetsInsert(integration.gsheets, headers, rowArr)
-        .catch(e => toast("Sheets hatası: " + e.message, "var(--err)"));
+      syncRecordToSheets(integration.gsheets, row, fields)
+        .catch(() => addToSyncQueue?.("create", row.id, { record: row, fields }, "gsheets"));
     }
   }, [customer, aciklama, extras, fields, user, onSave, onSyncUpdate, scheduleFocus, vibration, beep, integration, toast, isAdmin, adminShift, adminDate, validateBarcodeForSave, addToSyncQueue]);
 
