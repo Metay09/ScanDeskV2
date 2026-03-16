@@ -189,21 +189,23 @@ export default function App() {
           const gsActive = (old.active && old.type === "gsheets") ? true : (old.gsheets?.active ?? false);
           const pgUrl    = old.postgresApi?.serverUrl || old.supabase?.url || DEFAULT_POSTGRES_URL;
           const pgKey    = old.postgresApi?.apiKey    || old.supabase?.key || DEFAULT_POSTGRES_KEY;
+          const gsUrl = old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL;
           migratedIntegration = {
             postgresApi: { active: pgActive, serverUrl: pgUrl, apiKey: pgKey },
-            gsheets:     { active: gsActive, scriptUrl: old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL },
+            gsheets:     { active: DEFAULT_GSHEETS_ACTIVE ? true : gsActive, scriptUrl: gsUrl },
           };
         } else {
           // Yeni format — eksik alanları tamamla
+          const gsUrl = old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL;
           migratedIntegration = {
             postgresApi: {
-              active:    old.postgresApi?.active    ?? false,
+              active:    DEFAULT_POSTGRES_ACTIVE ? true : (old.postgresApi?.active ?? false),
               serverUrl: old.postgresApi?.serverUrl || DEFAULT_POSTGRES_URL,
               apiKey:    old.postgresApi?.apiKey    || DEFAULT_POSTGRES_KEY,
             },
             gsheets: {
-              active:    old.gsheets?.active    ?? false,
-              scriptUrl: old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL,
+              active:    DEFAULT_GSHEETS_ACTIVE ? true : (old.gsheets?.active ?? false),
+              scriptUrl: gsUrl,
             },
           };
         }
