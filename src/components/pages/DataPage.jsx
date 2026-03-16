@@ -242,11 +242,32 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const groups = {};
   filtered.forEach(r => { const k = r.customer || "(Müşteri yok)"; if (!groups[k]) groups[k] = []; groups[k].push(r); });
 
+  const hasIntegration = integration?.postgresApi?.active || integration?.gsheets?.active;
+
+  const SyncDot = ({ status, error }) => {
+    if (!hasIntegration) return null;
+    const cfg = status === "synced"
+      ? { color: "var(--ok)", title: "Senkronize edildi", symbol: "●" }
+      : status === "failed"
+      ? { color: "var(--err)", title: error || "Senkronizasyon başarısız", symbol: "●" }
+      : { color: "var(--acc)", title: "Senkronizasyon bekliyor", symbol: "●" };
+    return (
+      <span title={cfg.title} style={{ color: cfg.color, fontSize: 10, lineHeight: 1, cursor: "default" }}>
+        {cfg.symbol}
+      </span>
+    );
+  };
+
   const Rows = ({ rows, showCust }) => rows.map(r => (
     <tr key={r.id}>
       <td style={{ color: "var(--tx3)", fontSize: 10 }}>{records.indexOf(r) + 1}</td>
       <td><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
-      <td><span className="bc">{r.barcode}</span></td>
+      <td>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <SyncDot status={r.syncStatus} error={r.syncError} />
+          <span className="bc">{r.barcode}</span>
+        </div>
+      </td>
       {showCust && <td style={{ color: "var(--inf)", fontWeight: 600, fontSize: 12 }}>{r.customer || "—"}</td>}
       <td style={{ fontSize: 12, color: "var(--tx2)" }}>{r.aciklama || "—"}</td>
       <td><span className="sig-cell">{r.scanned_by}</span></td>
