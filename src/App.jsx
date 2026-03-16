@@ -435,7 +435,7 @@ export default function App() {
 
     // Giriş yapınca sunucudan en güncel kayıtları çek
     const int = integrationRef.current;
-    if (int.active && int.type === "postgres_api") {
+    if (int.postgresApi?.active) {
       try {
         const serverRecs = await fetchServerRecords(int.postgresApi);
         if (Array.isArray(serverRecs)) {
@@ -479,7 +479,7 @@ export default function App() {
   // SSE: sunucudan gelince kullanıcıları ve config'i güncelle
   const handleSSEUsersUpdate = useCallback(async () => {
     const int = integrationRef.current;
-    if (!int.active || int.type !== "postgres_api") return;
+    if (!int.postgresApi?.active) return;
     try {
       const su = await fetchServerUsers(int.postgresApi);
       if (!Array.isArray(su) || !su.length) return;
@@ -509,7 +509,7 @@ export default function App() {
 
   const handleSSEConfigUpdate = useCallback(async () => {
     const int = integrationRef.current;
-    if (!int.active || int.type !== "postgres_api") return;
+    if (!int.postgresApi?.active) return;
     try {
       const sc = await fetchServerConfig(int.postgresApi);
       if (!sc) return;
