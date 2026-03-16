@@ -320,10 +320,11 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
   const baseRecords = useMemo(() => {
     if (isAdmin) return records;
     return records.filter(r =>
+      r.scanned_by_username === user?.username &&
       r.shift === currentShift &&
       deriveShiftDate(r) === currentShiftDate
     );
-  }, [records, isAdmin, currentShift, currentShiftDate]);
+  }, [records, isAdmin, currentShift, currentShiftDate, user?.username]);
 
   // ── Filtre seçenekleri (temel kayıtlardan) ──
   const customerOptions = useMemo(() => {
