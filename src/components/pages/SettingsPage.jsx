@@ -65,13 +65,6 @@ export default function SettingsPage({
 
       {/* ── Genel Ayarlar (sadece admin) ─────────────────────────────── */}
       {isAdmin && <>
-        <div className="section-hd">Genel Ayarlar</div>
-        <div className="s-card">
-          <Row icon={I.barcode} label="Barkod Uzunluk Kontrolü" sub="İlk okutulan barkod uzunluğu ile devam eder, yanlış okumayı önler">
-            <Toggle value={settings.enforceBarcodeLengthMatch ?? true} onChange={v => setGlobal("enforceBarcodeLengthMatch", v)} />
-          </Row>
-        </div>
-
         <div className="section-hd">Güvenlik & İzinler</div>
         <div className="s-card">
           <Row icon={I.xlsx}   label="Dışa Aktarmaya İzin Ver"><Toggle value={settings.allowExport ?? true}       onChange={v => setGlobal("allowExport", v)} /></Row>
