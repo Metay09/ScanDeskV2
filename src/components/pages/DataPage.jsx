@@ -216,6 +216,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const visibleRecords = isAdmin
     ? records
     : records.filter(r =>
+        r.scanned_by_username === user?.username &&
         r.shift === currentShift &&
         deriveShiftDate(r) === currentShiftDate
       );
