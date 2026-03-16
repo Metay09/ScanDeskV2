@@ -43,11 +43,8 @@ export default function SettingsPage({
       {/* ── Kişisel Tercihler (herkes görür) ─────────────────────────── */}
       <div className="section-hd">Kişisel Tercihler</div>
       <div className="s-card">
-        <Row icon={I.save} label="Hızlı Okutma Modu" sub="Barkod gelir, direkt kaydolur, tekrar okutmaya hazır olur.">
-          <Toggle value={personal("autoSave", true)} onChange={v => {
-            setPersonal("autoSave", v);
-            if (v && personal("addDetailAfterScan", false)) setPersonal("addDetailAfterScan", false);
-          }} />
+        <Row icon={I.save} label="Hızlı Okutma Modu" sub="Açık: barkod gelir, direkt kaydolur. Kapalı: barkod okutulur, detay ekranı açılır.">
+          <Toggle value={personal("autoSave", true)} onChange={v => setPersonal("autoSave", v)} />
         </Row>
         <Row icon={I.vib} label="Titreşim"><Toggle value={personal("vibration", true)} onChange={v => setPersonal("vibration", v)} /></Row>
         <Row icon={I.bell} label="Bip Sesi"><Toggle value={personal("beep", true)} onChange={v => setPersonal("beep", v)} /></Row>
@@ -67,9 +64,6 @@ export default function SettingsPage({
       {isAdmin && <>
         <div className="section-hd">Genel Ayarlar</div>
         <div className="s-card">
-          <Row icon={I.edit} label="Detaylı Giriş Modu" sub="Barkod okutulur, detay ekranı açılır, müşteri/not girilir, kaydedilir.">
-            <Toggle value={settings.addDetailAfterScan ?? false} onChange={v => setGlobal("addDetailAfterScan", v)} />
-          </Row>
           <Row icon={I.barcode} label="Barkod Uzunluk Kontrolü" sub="İlk okutulan barkod uzunluğu ile devam eder, yanlış okumayı önler">
             <Toggle value={settings.enforceBarcodeLengthMatch ?? true} onChange={v => setGlobal("enforceBarcodeLengthMatch", v)} />
           </Row>

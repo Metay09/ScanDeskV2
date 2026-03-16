@@ -82,7 +82,8 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     setShowTakeoverPrompt(false);
   };
 
-  const { autoSave, addDetailAfterScan, vibration, beep, recentLimit = 10 } = scanSettings;
+  const { autoSave, vibration, beep, recentLimit = 10 } = scanSettings;
+  const addDetailAfterScan = !autoSave;
 
   // Admin: vardiya ve tarih seçebilir; normal kullanıcı: saate göre otomatik
   const [adminShift, setAdminShift] = useState(() => getCurrentShift());
