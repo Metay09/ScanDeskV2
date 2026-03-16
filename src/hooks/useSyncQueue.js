@@ -5,8 +5,9 @@ import { toDbPayload } from "../services/recordModel";
 
 /**
  * PostgreSQL ve Google Sheets senkronizasyon kuyruğunu yönetir.
+ * Her iki entegrasyon aynı anda aktif olabilir.
  *
- * @param {object}   integration    - Aktif entegrasyon config
+ * @param {object}   integration    - { postgresApi: { active, serverUrl, apiKey }, gsheets: { active, scriptUrl } }
  * @param {function} toast          - Bildirim fonksiyonu
  * @param {function} onSyncUpdate   - `(id, success, error)` — kayıt sync durumunu günceller
  *
@@ -24,7 +25,10 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
   }, []);
 
   const processSyncQueue = useCallback(async (silent = false) => {
-    if (!integration.active) {
+    const pgActive = integration.postgresApi?.active;
+    const gsActive = integration.gsheets?.active;
+
+    if (!pgActive && !gsActive) {
       if (!silent) toast("Entegrasyon aktif değil", "var(--err)");
       return { success: 0, failed: 0 };
     }
@@ -34,11 +38,13 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
       return { success: 0, failed: 0 };
     }
 
-    const retryable = getRetryableItems(syncQueue).filter(item =>
-      (item.integrationType || "postgres_api") === integration.type
-    );
+    const retryable = getRetryableItems(syncQueue).filter(item => {
+      const type = item.integrationType || "postgres_api";
+      return (type === "postgres_api" && pgActive) || (type === "gsheets" && gsActive);
+    });
+
     if (retryable.length === 0) {
-      if (!silent) toast("Bekleyen işlem yok", "var(--acc)");
+      if (!silent) toast("Bekleyen işlem yok", "var(--ok)");
       return { success: 0, failed: 0 };
     }
 
@@ -52,7 +58,15 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
         const wasRetry = item.status === "failed";
         setSyncQueue(prev => markAsProcessing(prev, item.id));
 
-        if (integration.type === "postgres_api") {
+        if (item.integrationType === "gsheets" || (!item.integrationType && gsActive && !pgActive)) {
+          if (item.action === "create" || item.action === "update") {
+            await syncRecordToSheets(integration.gsheets, item.payload.record ?? item.payload, item.payload.fields);
+            onSyncUpdate(item.recordId, true, null);
+          } else if (item.action === "delete") {
+            await sheetsDelete(integration.gsheets, item.recordId);
+          }
+        } else {
+          // postgres_api
           if (item.action === "create") {
             await postgresApiInsert(integration.postgresApi, toDbPayload(item.payload));
             onSyncUpdate(item.recordId, true, null);
@@ -61,13 +75,6 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
             onSyncUpdate(item.recordId, true, null);
           } else if (item.action === "delete") {
             await postgresApiDelete(integration.postgresApi, item.recordId);
-          }
-        } else if (integration.type === "gsheets") {
-          if (item.action === "create" || item.action === "update") {
-            await syncRecordToSheets(integration.gsheets, item.payload.record, item.payload.fields);
-            onSyncUpdate(item.recordId, true, null);
-          } else if (item.action === "delete") {
-            await sheetsDelete(integration.gsheets, item.recordId);
           }
         }
 
@@ -83,14 +90,16 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
 
     setIsSyncing(false);
 
-    if (failedCount === 0 && retriedCount === 0) {
-      toast(`${successCount} işlem senkronize edildi`, "var(--ok)");
-    } else if (failedCount === 0 && retriedCount > 0) {
-      toast(`${successCount} işlem senkronize edildi (${retriedCount} yeniden denendi)`, "var(--ok)");
-    } else if (successCount > 0 && failedCount > 0) {
-      toast(`${successCount} başarılı, ${failedCount} başarısız${retriedCount > 0 ? ` (${retriedCount} yeniden denendi)` : ""}`, "var(--err)");
-    } else {
-      toast(`Tümü başarısız: ${failedCount} hata`, "var(--err)");
+    if (!silent) {
+      if (failedCount === 0 && retriedCount === 0) {
+        toast(`${successCount} işlem senkronize edildi`, "var(--ok)");
+      } else if (failedCount === 0 && retriedCount > 0) {
+        toast(`${successCount} işlem senkronize edildi (${retriedCount} yeniden denendi)`, "var(--ok)");
+      } else if (successCount > 0 && failedCount > 0) {
+        toast(`${successCount} başarılı, ${failedCount} başarısız`, "var(--err)");
+      } else {
+        toast(`Tümü başarısız: ${failedCount} hata`, "var(--err)");
+      }
     }
 
     return { success: successCount, failed: failedCount, retried: retriedCount };
