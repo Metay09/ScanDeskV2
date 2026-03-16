@@ -892,7 +892,7 @@ export default function App() {
     if (aciklamaNext !== undefined) patch.aciklamaList = aciklamaNext;
     updateUsers(p => p.map(u => u.id === user.id ? { ...u, ...patch } : u));
     setUser(u => u ? { ...u, ...patch } : u);
-  }, [user]);
+  }, [user, updateUsers]);
 
   const customers = {
     list: custList,
