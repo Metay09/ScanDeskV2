@@ -946,13 +946,13 @@ export default function App() {
             className="btn btn-ghost btn-sm"
             style={{
               width: 36, height: 36, padding: 0, flexShrink: 0, position: "relative",
-              background: isSyncing ? "var(--acc)" : undefined,
+              background: isSyncing ? "var(--acc)" : retryableCount > 0 ? "rgba(239,68,68,.15)" : undefined,
               color: isSyncing ? "#000" : undefined,
               transition: "background 0.2s"
             }}
             onClick={processSyncQueue}
             disabled={isSyncing}
-            title={isSyncing ? "Senkronize ediliyor..." : "Bekleyenleri senkronize et"}
+            title={isSyncing ? "Senkronize ediliyor..." : retryableCount > 0 ? `${retryableCount} bekleyen işlem` : "Senkronize et"}
           >
             <Ic d={I.refresh} s={16} style={{ animation: isSyncing ? "spin 0.7s linear infinite" : "none" }} />
             {retryableCount > 0 && !isSyncing && (
@@ -995,13 +995,13 @@ export default function App() {
               className="btn btn-ghost btn-sm"
               style={{
                 width: 32, height: 32, padding: 0, marginLeft: "auto", flexShrink: 0, position: "relative",
-                background: isSyncing ? "var(--acc)" : undefined,
+                background: isSyncing ? "var(--acc)" : retryableCount > 0 ? "rgba(239,68,68,.15)" : undefined,
                 color: isSyncing ? "#000" : undefined,
                 transition: "background 0.2s"
               }}
               onClick={processSyncQueue}
               disabled={isSyncing}
-              title={isSyncing ? "Senkronize ediliyor..." : "Bekleyenleri senkronize et"}
+              title={isSyncing ? "Senkronize ediliyor..." : retryableCount > 0 ? `${retryableCount} bekleyen işlem` : "Senkronize et"}
             >
               <Ic d={I.refresh} s={14} style={{ animation: isSyncing ? "spin 0.7s linear infinite" : "none" }} />
               {retryableCount > 0 && !isSyncing && (

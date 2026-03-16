@@ -38,17 +38,19 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
       return { success: 0, failed: 0 };
     }
 
+    setIsSyncing(true);
+
     const retryable = getRetryableItems(syncQueue).filter(item => {
       const type = item.integrationType || "postgres_api";
       return (type === "postgres_api" && pgActive) || (type === "gsheets" && gsActive);
     });
 
     if (retryable.length === 0) {
+      await new Promise(r => setTimeout(r, 600));
+      setIsSyncing(false);
       if (!silent) toast("Bekleyen işlem yok", "var(--ok)");
       return { success: 0, failed: 0 };
     }
-
-    setIsSyncing(true);
     let successCount = 0;
     let failedCount  = 0;
     let retriedCount = 0;

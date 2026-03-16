@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Ic, I } from "../ui/Icon";
 import { genId } from "../../constants";
 import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../../utils";
-import { postgresApiInsert, sheetsInsert, syncRecordToSheets } from "../../services/integrations";
+import { postgresApiInsert, syncRecordToSheets } from "../../services/integrations";
 import { toDbPayload } from "../../services/recordModel";
 import EditRecordModal from "../modals/EditRecordModal";
 import CustomerPicker from "../shared/CustomerPicker";
@@ -276,39 +276,19 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     if (vibration && navigator.vibrate) navigator.vibrate([25, 15, 25]);
     if (beep) playBeep();
 
-    if (integration.active) {
-      const ef = fields.filter(f => f.id !== "barcode");
-      const headers = ["Barkod", ...ef.map(f => f.label), "Müşteri", "Açıklama", "Kaydeden", "Kullanıcı Adı", "Tarih", "Saat"];
-      // Flatten customFields for sync payload
-      const rowArr  = [row.id, bc, ...ef.map(f => row.customFields[f.id] ?? ""), row.customer, row.aciklama, row.scanned_by, row.scanned_by_username, now.toLocaleDateString("tr-TR"), now.toLocaleTimeString("tr-TR")];
-      if (integration.type === "postgres_api") {
-        // Convert camelCase to snake_case for PostgreSQL compatibility
-        const dbPayload = toDbPayload(row);
-        postgresApiInsert(integration.postgresApi, dbPayload)
-          .then(() => {
-            // Success: mark as synced
-            onSyncUpdate?.(row.id, true, null);
-          })
-          .catch(e => {
-            // Failure: mark as failed with error and add to queue
-            onSyncUpdate?.(row.id, false, e.message);
-            addToSyncQueue?.("create", row.id, row);
-            toast("PostgreSQL başarısız, kuyruğa eklendi", "var(--acc)");
-          });
-      } else {
-        // Google Sheets with no-cors mode
-        // Note: no-cors fetch returns opaque response - cannot detect server errors
-        // We can only mark as "synced" when request is sent, not when server confirms
-        sheetsInsert(integration.gsheets, headers, rowArr)
-          .then(() => {
-            // Request sent successfully (but server response unknown due to no-cors)
-            // Don't update sync status for Google Sheets
-          })
-          .catch(e => {
-            // Network error or request failed to send
-            toast("Sheets hatası: " + e.message, "var(--err)");
-          });
-      }
+    if (integration.postgresApi?.active) {
+      const dbPayload = toDbPayload(row);
+      postgresApiInsert(integration.postgresApi, dbPayload)
+        .then(() => onSyncUpdate?.(row.id, true, null))
+        .catch(e => {
+          onSyncUpdate?.(row.id, false, e.message);
+          addToSyncQueue?.("create", row.id, row);
+          toast("PostgreSQL başarısız, kuyruğa eklendi", "var(--acc)");
+        });
+    }
+    if (integration.gsheets?.active) {
+      syncRecordToSheets(integration.gsheets, row, fields)
+        .catch(() => addToSyncQueue?.("create", row.id, { record: row, fields }, "gsheets"));
     }
   }, [customer, aciklama, extras, fields, user, onSave, onSyncUpdate, scheduleFocus, vibration, beep, integration, toast, isAdmin, adminShift, adminDate, validateBarcodeForSave, addToSyncQueue]);
 
@@ -405,19 +385,18 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
       onSave(newRecord);
 
       // Entegrasyon senkronizasyonu
-      if (integration.active) {
-        if (integration.type === "postgres_api") {
-          const dbPayload = toDbPayload(newRecord);
-          postgresApiInsert(integration.postgresApi, dbPayload)
-            .then(() => onSyncUpdate?.(newRecord.id, true, null))
-            .catch(e => {
-              onSyncUpdate?.(newRecord.id, false, e.message);
-              addToSyncQueue?.("create", newRecord.id, newRecord);
-            });
-        } else if (integration.type === "gsheets") {
-          syncRecordToSheets(integration.gsheets, newRecord, fields)
-            .catch(() => addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets"));
-        }
+      if (integration.postgresApi?.active) {
+        const dbPayload = toDbPayload(newRecord);
+        postgresApiInsert(integration.postgresApi, dbPayload)
+          .then(() => onSyncUpdate?.(newRecord.id, true, null))
+          .catch(e => {
+            onSyncUpdate?.(newRecord.id, false, e.message);
+            addToSyncQueue?.("create", newRecord.id, newRecord);
+          });
+      }
+      if (integration.gsheets?.active) {
+        syncRecordToSheets(integration.gsheets, newRecord, fields)
+          .catch(() => addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets"));
       }
     });
 
@@ -602,7 +581,11 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
         <Ic d={I.sig} s={14} />
         <span><span style={{ color: 'var(--acc)' }}>İmza:</span> <b>{user.name}</b> ({user.username})</span>
         {autoSave && <span style={{ opacity: .7 }}>· otomatik kayıt</span>}
-        {integration.active && <span style={{ marginLeft: "auto", opacity: .7, fontSize: 11 }}>→ {integration.type === "postgres_api" ? "PostgreSQL API" : "Sheets"}</span>}
+        {(integration.postgresApi?.active || integration.gsheets?.active) && (
+          <span style={{ marginLeft: "auto", opacity: .7, fontSize: 11 }}>
+            → {[integration.postgresApi?.active && "PostgreSQL", integration.gsheets?.active && "Sheets"].filter(Boolean).join(" + ")}
+          </span>
+        )}
       </div>
 
       {/* Son Okutmalar */}
