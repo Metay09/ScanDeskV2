@@ -46,6 +46,9 @@ export default function SettingsPage({
         <Row icon={I.save} label="Hızlı Okutma Modu" sub="Açık: barkod gelir, direkt kaydolur. Kapalı: barkod okutulur, detay ekranı açılır.">
           <Toggle value={personal("autoSave", true)} onChange={v => setPersonal("autoSave", v)} />
         </Row>
+        <Row icon={I.barcode} label="Barkod Uzunluk Kontrolü" sub="İlk okutulan barkod uzunluğu ile devam eder, yanlış okumayı önler">
+          <Toggle value={personal("enforceBarcodeLengthMatch", true)} onChange={v => setPersonal("enforceBarcodeLengthMatch", v)} />
+        </Row>
         <Row icon={I.vib} label="Titreşim"><Toggle value={personal("vibration", true)} onChange={v => setPersonal("vibration", v)} /></Row>
         <Row icon={I.bell} label="Bip Sesi"><Toggle value={personal("beep", true)} onChange={v => setPersonal("beep", v)} /></Row>
         <Row icon={I.data} label="Son Okutmalar" sub="Aktif vardiyada gösterilecek son kayıt sayısı">
@@ -62,13 +65,6 @@ export default function SettingsPage({
 
       {/* ── Genel Ayarlar (sadece admin) ─────────────────────────────── */}
       {isAdmin && <>
-        <div className="section-hd">Genel Ayarlar</div>
-        <div className="s-card">
-          <Row icon={I.barcode} label="Barkod Uzunluk Kontrolü" sub="İlk okutulan barkod uzunluğu ile devam eder, yanlış okumayı önler">
-            <Toggle value={settings.enforceBarcodeLengthMatch ?? true} onChange={v => setGlobal("enforceBarcodeLengthMatch", v)} />
-          </Row>
-        </div>
-
         <div className="section-hd">Güvenlik & İzinler</div>
         <div className="s-card">
           <Row icon={I.xlsx}   label="Dışa Aktarmaya İzin Ver"><Toggle value={settings.allowExport ?? true}       onChange={v => setGlobal("allowExport", v)} /></Row>
