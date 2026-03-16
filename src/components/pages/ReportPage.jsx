@@ -303,6 +303,7 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
   const [dateFrom,           setDateFrom]           = useState("");
   const [dateTo,             setDateTo]             = useState("");
   const [selectedShifts,     setSelectedShifts]     = useState([]);
+  const [shiftOpen,          setShiftOpen]          = useState(false);
   const [selectedCustomers,  setSelectedCustomers]  = useState([]);
   const [selectedAciklamalar,setSelectedAciklamalar]= useState([]);
   const [dynFilters,         setDynFilters]         = useState({});
@@ -462,11 +463,6 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
     setDynFilters(p => ({ ...p, [fid]: val }));
   }, []);
 
-  const toggleShift = (s) =>
-    setSelectedShifts(p =>
-      p.includes(s) ? p.filter(x => x !== s) : [...p, s]
-    );
-
   const hasActiveFilters = !!(
     dateFrom || dateTo ||
     selectedShifts.length ||
@@ -532,46 +528,63 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
       {/* ── Filtre Toolbar ──────────────────────────────────── */}
       <div style={{ marginBottom: 14 }}>
 
-        {/* Tarih aralığı — yalnızca admin */}
-        {isAdmin && (
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: 8, marginBottom: 8,
-          }}>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              style={{ height: 38 }}
-              title="Başlangıç Tarihi"
-            />
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              style={{ height: 38 }}
-              title="Bitiş Tarihi"
-            />
-          </div>
-        )}
-
-        {/* Filtre satırı: Vardiya + Müşteri + Açıklama */}
+        {/* Filtre satırı: Tarih + Vardiya + Müşteri + Açıklama */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
 
-          {/* Vardiya — yalnızca admin */}
-          {isAdmin && FIXED_SHIFTS.map(s => {
-            const active = selectedShifts.includes(s.label);
-            return (
+          {/* Tarih aralığı — yalnızca admin */}
+          {isAdmin && (
+            <>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+                title="Başlangıç Tarihi"
+              />
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+                title="Bitiş Tarihi"
+              />
+            </>
+          )}
+
+          {/* Vardiya dropdown (çoklu seçim) — yalnızca admin */}
+          {isAdmin && (
+            <div style={{ position: "relative" }}>
               <button
-                key={s.label}
-                type="button"
-                className={`btn btn-sm ${active ? "btn-info" : "btn-ghost"}`}
-                onClick={() => toggleShift(s.label)}
+                className={`btn btn-sm ${selectedShifts.length > 0 ? "btn-info" : "btn-ghost"}`}
+                onClick={() => setShiftOpen(p => !p)}
               >
-                {s.label}
+                <Ic d={I.report} s={14} /> {selectedShifts.length === 0 ? "Vardiya" : selectedShifts.length === 1 ? selectedShifts[0] : `${selectedShifts.length} Vardiya`}
               </button>
-            );
-          })}
+              {shiftOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 140, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
+                  {FIXED_SHIFTS.map(s => {
+                    const active = selectedShifts.includes(s.label);
+                    return (
+                      <div key={s.label}
+                        onClick={() => setSelectedShifts(p => active ? p.filter(x => x !== s.label) : [...p, s.label])}
+                        style={{ padding: "10px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontWeight: active ? 700 : 400, color: active ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                        <span style={{ width: 14, height: 14, border: `1.5px solid ${active ? "var(--inf)" : "var(--brd)"}`, borderRadius: 3, background: active ? "var(--inf)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {active && <Ic d={I.check} s={10} style={{ color: "#fff" }} />}
+                        </span>
+                        {s.label}
+                      </div>
+                    );
+                  })}
+                  {selectedShifts.length > 0 && (
+                    <div onClick={() => { setSelectedShifts([]); setShiftOpen(false); }}
+                      style={{ padding: "10px 14px", cursor: "pointer", color: "var(--err)", fontSize: 13, fontWeight: 500 }}>
+                      Temizle
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Müşteri */}
           <div style={{ flex: 1, minWidth: 130 }}>
