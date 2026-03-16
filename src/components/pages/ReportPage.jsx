@@ -538,14 +538,14 @@ export default function ReportPage({ records, fields, isAdmin, currentShift, use
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
-                style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+                className="shift-date"
                 title="Başlangıç Tarihi"
               />
               <input
                 type="date"
                 value={dateTo}
                 onChange={e => setDateTo(e.target.value)}
-                style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+                className="shift-date"
                 title="Bitiş Tarihi"
               />
             </>
