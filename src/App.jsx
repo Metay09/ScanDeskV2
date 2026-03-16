@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } fr
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import "./index.css";
-import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_USER_SETTINGS, DEFAULT_INTEGRATION_ACTIVE } from "./constants";
+import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_USER_SETTINGS, DEFAULT_POSTGRES_ACTIVE } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
@@ -33,9 +33,8 @@ export default function App() {
   const [aciklamaList, setAciklamaList] = useState(DEFAULT_ACIKLAMAS);
   const [settings, setSettings]   = useState(INITIAL_SETTINGS);
   const [integration, setIntegration] = useState({
-    active: DEFAULT_INTEGRATION_ACTIVE, type: "postgres_api",
-    postgresApi: { serverUrl: DEFAULT_POSTGRES_URL, apiKey: DEFAULT_POSTGRES_KEY },
-    gsheets:     { scriptUrl: DEFAULT_GSHEETS_URL },
+    postgresApi: { active: DEFAULT_POSTGRES_ACTIVE, serverUrl: DEFAULT_POSTGRES_URL, apiKey: DEFAULT_POSTGRES_KEY },
+    gsheets:     { active: false, scriptUrl: DEFAULT_GSHEETS_URL },
   });
   const [hydrated, setHydrated] = useState(false);
   const [theme, setTheme] = useState("dark");
@@ -67,7 +66,7 @@ export default function App() {
    *  patch ile sadece değişen alanı override et; geri kalanlar ref'ten alınır. */
   const syncConfigToServer = useCallback((patch = {}) => {
     const int = integrationRef.current;
-    if (!int.active || int.type !== "postgres_api") return;
+    if (!int.postgresApi?.active) return;
     pushServerConfig(int.postgresApi, {
       fields:       fieldsRef.current,
       custList:     custListRef.current,
@@ -80,7 +79,7 @@ export default function App() {
   /** Kullanıcı listesini sunucuya iter. */
   const syncUsersToServer = useCallback((updatedUsers) => {
     const int = integrationRef.current;
-    if (!int.active || int.type !== "postgres_api") return;
+    if (!int.postgresApi?.active) return;
     pushServerUsers(int.postgresApi, updatedUsers).catch(() => {});
   }, []);
 
@@ -88,7 +87,7 @@ export default function App() {
   useEffect(() => {
     const handleOnline = async () => {
       const int = integrationRef.current;
-      if (!int.active || int.type !== "postgres_api") return;
+      if (!int.postgresApi?.active) return;
       try {
         const su = await fetchServerUsers(int.postgresApi);
         if (Array.isArray(su) && su.length) {
@@ -181,31 +180,32 @@ export default function App() {
 
       let finalIntegration = null;
       if (st?.integration) {
-        // Migration: convert old supabase config to new postgres_api config
-        let migratedIntegration = st.integration;
-        if (st.integration.type === "supabase" && st.integration.supabase) {
+        const old = st.integration;
+        let migratedIntegration;
+
+        // Eski format: { active, type, postgresApi, gsheets } → yeni: { postgresApi: { active, ... }, gsheets: { active, ... } }
+        if ("active" in old || "type" in old) {
+          const pgActive = (old.active && (old.type === "postgres_api" || old.type === "supabase")) ? true : (old.postgresApi?.active ?? false);
+          const gsActive = (old.active && old.type === "gsheets") ? true : (old.gsheets?.active ?? false);
+          const pgUrl    = old.postgresApi?.serverUrl || old.supabase?.url || DEFAULT_POSTGRES_URL;
+          const pgKey    = old.postgresApi?.apiKey    || old.supabase?.key || DEFAULT_POSTGRES_KEY;
           migratedIntegration = {
-            ...st.integration,
-            type: "postgres_api",
-            postgresApi: {
-              serverUrl: st.integration.supabase.url || DEFAULT_POSTGRES_URL,
-              apiKey: st.integration.supabase.key || DEFAULT_POSTGRES_KEY
-            },
-            supabase: undefined
+            postgresApi: { active: pgActive, serverUrl: pgUrl, apiKey: pgKey },
+            gsheets:     { active: gsActive, scriptUrl: old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL },
           };
-        }
-        // postgresApi alanı yoksa varsayılan oluştur
-        if (!migratedIntegration.postgresApi) {
-          migratedIntegration.postgresApi = { serverUrl: DEFAULT_POSTGRES_URL, apiKey: DEFAULT_POSTGRES_KEY };
         } else {
-          if (!migratedIntegration.postgresApi.serverUrl) migratedIntegration.postgresApi.serverUrl = DEFAULT_POSTGRES_URL;
-          if (!migratedIntegration.postgresApi.apiKey)    migratedIntegration.postgresApi.apiKey    = DEFAULT_POSTGRES_KEY;
-        }
-        // gsheets alanı yoksa varsayılan oluştur
-        if (!migratedIntegration.gsheets) {
-          migratedIntegration.gsheets = { scriptUrl: DEFAULT_GSHEETS_URL };
-        } else {
-          if (!migratedIntegration.gsheets.scriptUrl) migratedIntegration.gsheets.scriptUrl = DEFAULT_GSHEETS_URL;
+          // Yeni format — eksik alanları tamamla
+          migratedIntegration = {
+            postgresApi: {
+              active:    old.postgresApi?.active    ?? false,
+              serverUrl: old.postgresApi?.serverUrl || DEFAULT_POSTGRES_URL,
+              apiKey:    old.postgresApi?.apiKey    || DEFAULT_POSTGRES_KEY,
+            },
+            gsheets: {
+              active:    old.gsheets?.active    ?? false,
+              scriptUrl: old.gsheets?.scriptUrl || DEFAULT_GSHEETS_URL,
+            },
+          };
         }
         finalIntegration = migratedIntegration;
         setIntegration(migratedIntegration);
@@ -262,7 +262,7 @@ export default function App() {
       // postgres_api aktifse kullanıcılar ve uygulama yapılandırması
       // sunucudan çekilir; sunucu "source of truth" olarak kullanılır.
       // Sunucu ulaşılamaz ya da endpoint henüz yoksa sessizce local data ile devam edilir.
-      if (finalIntegration?.active && finalIntegration.type === "postgres_api" && finalIntegration.postgresApi) {
+      if (finalIntegration?.postgresApi?.active && finalIntegration.postgresApi.serverUrl) {
         try {
           const [serverUsers, serverConfig, serverRecords] = await Promise.allSettled([
             fetchServerUsers(finalIntegration.postgresApi),
@@ -541,7 +541,7 @@ export default function App() {
     setLastSaved(p => (p && idSet.has(p.id) ? null : p));
     toast(ids.length === 1 ? "Kayıt silindi" : `${ids.length} kayıt silindi`, "var(--err)");
 
-    if (integration.active && integration.type === "postgres_api") {
+    if (integration.postgresApi?.active) {
       ids.forEach(id => {
         const record = deletedRecords.find(r => r.id === id);
         postgresApiDelete(integration.postgresApi, id)
@@ -549,7 +549,7 @@ export default function App() {
       });
     }
 
-    if (integration.active && integration.type === "gsheets") {
+    if (integration.gsheets?.active) {
       ids.forEach(id => {
         sheetsDelete(integration.gsheets, id)
           .catch(() => addToSyncQueue("delete", id, { id }, "gsheets"));
@@ -564,7 +564,7 @@ export default function App() {
     setRecords(p => p.map(x => x.id === rec.id ? rec : x));
     toast("Güncellendi", "var(--inf)");
 
-    if (integration.active && integration.type === "postgres_api") {
+    if (integration.postgresApi?.active) {
       const dbPayload = toDbPayload(rec);
       postgresApiUpdate(integration.postgresApi, rec.id, dbPayload)
         .then(() => handleSyncUpdate?.(rec.id, true, null))
@@ -575,7 +575,7 @@ export default function App() {
         });
     }
 
-    if (integration.active && integration.type === "gsheets") {
+    if (integration.gsheets?.active) {
       syncRecordToSheets(integration.gsheets, rec, fields)
         .catch(() => addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets"));
     }
@@ -589,7 +589,7 @@ export default function App() {
       toast("Tüm veriler temizlendi", "var(--err)");
 
       // Sync each deletion to PostgreSQL if integration is active
-      if (integration.active && integration.type === "postgres_api") {
+      if (integration.postgresApi?.active) {
         recordsToDelete.forEach(record => {
           postgresApiDelete(integration.postgresApi, record.id)
             .catch(err => {
@@ -603,7 +603,7 @@ export default function App() {
       }
 
       // Sync each deletion to Google Sheets if integration is active
-      if (integration.active && integration.type === "gsheets") {
+      if (integration.gsheets?.active) {
         recordsToDelete.forEach(record => {
           sheetsDelete(integration.gsheets, record.id)
             .catch(e => {
@@ -640,7 +640,7 @@ export default function App() {
     setLastSaved(p => (p && (p.timestamp >= a && p.timestamp <= b) ? null : p));
 
     // Sync each deletion to PostgreSQL if integration is active
-    if (integration.active && integration.type === "postgres_api") {
+    if (integration.postgresApi?.active) {
       recordsToDelete.forEach(record => {
         postgresApiDelete(integration.postgresApi, record.id)
           .catch(err => {
@@ -654,7 +654,7 @@ export default function App() {
     }
 
     // Sync each deletion to Google Sheets if integration is active
-    if (integration.active && integration.type === "gsheets") {
+    if (integration.gsheets?.active) {
       recordsToDelete.forEach(record => {
         sheetsDelete(integration.gsheets, record.id)
           .catch(e => {
@@ -794,50 +794,34 @@ export default function App() {
     setRecords(p => [...normalized, ...p]);
     toast(`✓ ${normalized.length} kayıt içe aktarıldı`, "var(--ok)");
 
-    // Sync each imported record to integrations (same logic as new scans)
-    if (integration.active && normalized.length > 0) {
-      let syncedCount = 0;
-      let failedCount = 0;
-
+    // Sync each imported record to both active integrations
+    const pgActive = integration.postgresApi?.active;
+    const gsActive = integration.gsheets?.active;
+    if ((pgActive || gsActive) && normalized.length > 0) {
+      let pgSynced = 0, pgFailed = 0;
       for (const record of normalized) {
-        // PostgreSQL integration
-        if (integration.type === "postgres_api") {
+        if (pgActive) {
           try {
-            const dbPayload = toDbPayload(record);
-            await postgresApiInsert(integration.postgresApi, dbPayload);
-            // Success: mark as synced
+            await postgresApiInsert(integration.postgresApi, toDbPayload(record));
             handleSyncUpdate(record.id, true, null);
-            syncedCount++;
+            pgSynced++;
           } catch (e) {
-            // Failure: mark as failed with error and add to queue
             handleSyncUpdate(record.id, false, e.message);
             addToSyncQueue("create", record.id, record);
-            failedCount++;
+            pgFailed++;
           }
         }
-        // Google Sheets integration
-        else if (integration.type === "gsheets") {
-          try {
-            await syncRecordToSheets(integration.gsheets, record, fields);
-            syncedCount++;
-          } catch (e) {
-            // Network error - just log it (can't detect server errors due to no-cors)
-            console.error("Sheets sync error on import:", e);
-            failedCount++;
-          }
+        if (gsActive) {
+          try { await syncRecordToSheets(integration.gsheets, record, fields); }
+          catch { addToSyncQueue("create", record.id, { record, fields }, "gsheets"); }
         }
       }
-
-      // Show sync result
-      if (integration.type === "postgres_api") {
-        if (failedCount === 0) {
-          toast(`${syncedCount} kayıt PostgreSQL'e senkronize edildi`, "var(--ok)");
-        } else {
-          toast(`${syncedCount} senkronize, ${failedCount} başarısız (kuyruğa eklendi)`, "var(--acc)");
-        }
-      } else if (integration.type === "gsheets") {
-        toast(`${normalized.length} kayıt Google Sheets'e gönderildi`, "var(--ok)");
+      if (pgActive) {
+        pgFailed === 0
+          ? toast(`${pgSynced} kayıt PostgreSQL'e senkronize edildi`, "var(--ok)")
+          : toast(`${pgSynced} senkronize, ${pgFailed} başarısız (kuyruğa eklendi)`, "var(--acc)");
       }
+      if (gsActive) toast(`${normalized.length} kayıt Google Sheets'e gönderildi`, "var(--ok)");
     }
   };
 
@@ -957,42 +941,26 @@ export default function App() {
       <div className="topbar">
         <div className="logo-icon" style={{ width: 28, height: 28, borderRadius: 7 }}><Ic d={I.barcode} s={14} /></div>
         <span style={{ fontSize: 15, fontWeight: 800 }}>ScanDesk</span>
-        {integration.active && integration.type === "postgres_api" && (
+        {(integration.postgresApi?.active || integration.gsheets?.active) && (
           <button
             className="btn btn-ghost btn-sm"
             style={{
-              width: 36,
-              height: 36,
-              padding: 0,
-              flexShrink: 0,
-              position: "relative"
+              width: 36, height: 36, padding: 0, flexShrink: 0, position: "relative",
+              background: isSyncing ? "var(--acc)" : undefined,
+              color: isSyncing ? "#000" : undefined,
+              transition: "background 0.2s"
             }}
             onClick={processSyncQueue}
             disabled={isSyncing}
-            title="Bekleyenleri senkronize et"
+            title={isSyncing ? "Senkronize ediliyor..." : "Bekleyenleri senkronize et"}
           >
-            <Ic
-              d={I.refresh}
-              s={16}
-              style={{
-                animation: isSyncing ? "spin 1s linear infinite" : "none"
-              }}
-            />
-            {retryableCount > 0 && (
+            <Ic d={I.refresh} s={16} style={{ animation: isSyncing ? "spin 0.7s linear infinite" : "none" }} />
+            {retryableCount > 0 && !isSyncing && (
               <span style={{
-                position: "absolute",
-                top: 2,
-                right: 2,
-                background: "var(--err)",
-                color: "#fff",
-                fontSize: 9,
-                fontWeight: 700,
-                borderRadius: "50%",
-                width: 14,
-                height: 14,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
+                position: "absolute", top: 2, right: 2,
+                background: "var(--err)", color: "#fff",
+                fontSize: 9, fontWeight: 700, borderRadius: "50%",
+                width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center"
               }}>
                 {retryableCount}
               </span>
@@ -1022,43 +990,26 @@ export default function App() {
         <div className="side-logo">
           <div className="logo-icon" style={{ width: 30, height: 30, borderRadius: 8 }}><Ic d={I.barcode} s={14} /></div>
           ScanDesk
-          {integration.active && integration.type === "postgres_api" && (
+          {(integration.postgresApi?.active || integration.gsheets?.active) && (
             <button
               className="btn btn-ghost btn-sm"
               style={{
-                width: 32,
-                height: 32,
-                padding: 0,
-                marginLeft: "auto",
-                flexShrink: 0,
-                position: "relative"
+                width: 32, height: 32, padding: 0, marginLeft: "auto", flexShrink: 0, position: "relative",
+                background: isSyncing ? "var(--acc)" : undefined,
+                color: isSyncing ? "#000" : undefined,
+                transition: "background 0.2s"
               }}
               onClick={processSyncQueue}
               disabled={isSyncing}
-              title="Bekleyenleri senkronize et"
+              title={isSyncing ? "Senkronize ediliyor..." : "Bekleyenleri senkronize et"}
             >
-              <Ic
-                d={I.refresh}
-                s={14}
-                style={{
-                  animation: isSyncing ? "spin 1s linear infinite" : "none"
-                }}
-              />
-              {retryableCount > 0 && (
+              <Ic d={I.refresh} s={14} style={{ animation: isSyncing ? "spin 0.7s linear infinite" : "none" }} />
+              {retryableCount > 0 && !isSyncing && (
                 <span style={{
-                  position: "absolute",
-                  top: 1,
-                  right: 1,
-                  background: "var(--err)",
-                  color: "#fff",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  borderRadius: "50%",
-                  width: 14,
-                  height: 14,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
+                  position: "absolute", top: 1, right: 1,
+                  background: "var(--err)", color: "#fff",
+                  fontSize: 9, fontWeight: 700, borderRadius: "50%",
+                  width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center"
                 }}>
                   {retryableCount}
                 </span>
@@ -1070,7 +1021,7 @@ export default function App() {
           <button key={n.id} className={`side-item ${page === n.id ? "active" : ""}`} onClick={() => setPage(n.id)}>
             <Ic d={n.icon} s={15} />{n.label}
             {n.id === "data" && visibleRecordsCount > 0 && <span className="nav-badge" style={{ marginLeft: "auto" }}>{visibleRecordsCount}</span>}
-            {n.id === "settings" && integration.active && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", marginLeft: "auto" }} />}
+            {n.id === "settings" && (integration.postgresApi?.active || integration.gsheets?.active) && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", marginLeft: "auto" }} />}
           </button>
         ))}
         <div className="side-footer">

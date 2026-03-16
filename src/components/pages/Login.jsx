@@ -15,7 +15,7 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
     setErr("");
 
     const isAdminUser = u.trim() === "admin";
-    const useServer = !isAdminUser && integration?.active && integration?.type === "postgres_api";
+    const useServer = !isAdminUser && integration?.postgresApi?.active;
 
     if (useServer) {
       setLoading(true);
@@ -83,7 +83,7 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         <button className="btn btn-primary btn-full btn-lg" onClick={goAuth} disabled={loading}>
           {loading ? "Bağlanıyor..." : "Giriş Yap"}
         </button>
-        {integration?.active && integration?.type === "postgres_api" && (
+        {integration?.postgresApi?.active && (
           <p style={{ marginTop: 14, fontSize: 11, color: "var(--tx2)", textAlign: "center", lineHeight: 1.5 }}>
             Admin dışındaki kullanıcılar için internet bağlantısı gereklidir.
           </p>

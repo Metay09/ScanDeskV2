@@ -28,7 +28,7 @@ export const DEFAULT_POSTGRES_URL = import.meta.env.VITE_SERVER_URL || "";
 export const DEFAULT_POSTGRES_KEY = import.meta.env.VITE_API_KEY || "";
 export const DEFAULT_GSHEETS_URL  = "";
 // Her iki değer de tanımlıysa entegrasyonu başlangıçta aktif aç
-export const DEFAULT_INTEGRATION_ACTIVE =
+export const DEFAULT_POSTGRES_ACTIVE =
   !!(import.meta.env.VITE_SERVER_URL && import.meta.env.VITE_API_KEY);
 
 // Admin (global) ayarlar — sadece admin değiştirebilir, tüm cihazlara uygulanır

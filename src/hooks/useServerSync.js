@@ -52,7 +52,7 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
     if (esRef.current) return; // zaten bağlı
 
     const int = integration;
-    if (!int?.active || int.type !== "postgres_api") return;
+    if (!int?.postgresApi?.active) return;
 
     const { serverUrl, apiKey } = int.postgresApi;
     const base = serverUrl.replace(/\/$/, "");
@@ -109,7 +109,7 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
   }, [integration, startPolling, stopPolling]);
 
   useEffect(() => {
-    if (!integration?.active || integration.type !== "postgres_api") return;
+    if (!integration?.postgresApi?.active) return;
 
     activeRef.current = true;
     connect();
@@ -121,5 +121,5 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
       esRef.current = null;
       stopPolling();
     };
-  }, [integration?.active, integration?.type, integration?.postgresApi?.serverUrl, integration?.postgresApi?.apiKey, connect, stopPolling]);
+  }, [integration?.postgresApi?.active, integration?.postgresApi?.serverUrl, integration?.postgresApi?.apiKey, connect, stopPolling]);
 }

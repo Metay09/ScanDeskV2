@@ -123,11 +123,18 @@ export default function SettingsPage({
 
         <div className="section-hd">Entegrasyon</div>
 
-        {integration.active && (
+        {integration.postgresApi?.active && (
+          <div style={{ margin: "0 0 6px", padding: "10px 12px", background: "var(--ok2)", border: "1.5px solid var(--ok3)", borderRadius: "var(--r)", fontSize: 12, color: "var(--ok)", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ok)" }} />
+            Aktif: PostgreSQL API
+            <button className="btn btn-danger btn-sm" style={{ marginLeft: "auto", height: 30 }} onClick={() => setIntegration(p => ({ ...p, postgresApi: { ...p.postgresApi, active: false } }))}>Durdur</button>
+          </div>
+        )}
+        {integration.gsheets?.active && (
           <div style={{ margin: "0 0 10px", padding: "10px 12px", background: "var(--ok2)", border: "1.5px solid var(--ok3)", borderRadius: "var(--r)", fontSize: 12, color: "var(--ok)", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ok)" }} />
-            Aktif: {integration.type === "postgres_api" ? "PostgreSQL API" : "Google Sheets"}
-            <button className="btn btn-danger btn-sm" style={{ marginLeft: "auto", height: 30 }} onClick={() => setIntegration(p => ({ ...p, active: false }))}>Durdur</button>
+            Aktif: Google Sheets
+            <button className="btn btn-danger btn-sm" style={{ marginLeft: "auto", height: 30 }} onClick={() => setIntegration(p => ({ ...p, gsheets: { ...p.gsheets, active: false } }))}>Durdur</button>
           </div>
         )}
         {/* PostgreSQL API */}
@@ -135,7 +142,7 @@ export default function SettingsPage({
           <div className={`int-hd ${pgOpen ? "open" : ""}`} onClick={() => setPgOpen(p => !p)}>
             <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(62,207,142,.15)", border: "1.5px solid rgba(62,207,142,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ic d={I.cloud} s={17} /></div>
             <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13 }}>PostgreSQL API</div><div style={{ fontSize: 12, color: "var(--tx2)" }}>Sunucundaki API üzerinden PostgreSQL senkronizasyonu</div></div>
-            {integration.active && integration.type === "postgres_api" && <span className="badge badge-ok">AKTİF</span>}
+            {integration.postgresApi?.active && <span className="badge badge-ok">AKTİF</span>}
             <Ic d={I.chevD} s={14} />
           </div>
           {pgOpen && (
@@ -148,7 +155,7 @@ export default function SettingsPage({
               </div>
               <div><label className="lbl">Server URL</label><input placeholder="https://scandesk-api.simsekhome.site" value={pg.serverUrl} onChange={e => setPg(p => ({ ...p, serverUrl: e.target.value }))} /></div>
               <div><label className="lbl">API Key</label><PasswordInput value={pg.apiKey} onChange={e => setPg(p => ({ ...p, apiKey: e.target.value }))} placeholder="scandesk_live_xxxxxxxxx" /></div>
-              <button className="btn btn-ok btn-full" onClick={() => { if (!pg.serverUrl || !pg.apiKey) { toast("Tüm alanları doldurun", "var(--err)"); return; } setIntegration({ type: "postgres_api", active: true, postgresApi: pg, gsheets: gs }); toast("PostgreSQL API aktif edildi"); setPgOpen(false); }}><Ic d={I.check} s={15} /> Aktif Et</button>
+              <button className="btn btn-ok btn-full" onClick={() => { if (!pg.serverUrl || !pg.apiKey) { toast("Tüm alanları doldurun", "var(--err)"); return; } setIntegration(p => ({ ...p, postgresApi: { ...pg, active: true } })); toast("PostgreSQL API aktif edildi"); setPgOpen(false); }}><Ic d={I.check} s={15} /> Aktif Et</button>
             </div>
           )}
         </div>
@@ -157,7 +164,7 @@ export default function SettingsPage({
           <div className={`int-hd ${gsOpen ? "open" : ""}`} onClick={() => setGsOpen(p => !p)}>
             <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(34,197,94,.15)", border: "1.5px solid rgba(34,197,94,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ic d={I.sheets} s={17} /></div>
             <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 13 }}>Google Sheets</div><div style={{ fontSize: 12, color: "var(--tx2)" }}>Kayıtları Google Sheets'e senkronize et (oluştur, güncelle, sil)</div></div>
-            {integration.active && integration.type === "gsheets" && <span className="badge badge-ok">AKTİF</span>}
+            {integration.gsheets?.active && <span className="badge badge-ok">AKTİF</span>}
             <Ic d={I.chevD} s={14} />
           </div>
           {gsOpen && (
@@ -177,7 +184,7 @@ export default function SettingsPage({
                 <b>4.</b> Oluşan URL'yi aşağıya yapıştır
               </div>
               <div><label className="lbl">Web App URL</label><input placeholder="https://script.google.com/macros/s/..." value={gs.scriptUrl} onChange={e => setGs(p => ({ ...p, scriptUrl: e.target.value }))} /></div>
-              <button className="btn btn-ok btn-full" onClick={() => { if (!gs.scriptUrl) { toast("URL gerekli", "var(--err)"); return; } setIntegration({ type: "gsheets", active: true, postgresApi: pg, gsheets: gs }); toast("Google Sheets aktif edildi"); setGsOpen(false); }}><Ic d={I.check} s={15} /> Aktif Et</button>
+              <button className="btn btn-ok btn-full" onClick={() => { if (!gs.scriptUrl) { toast("URL gerekli", "var(--err)"); return; } setIntegration(p => ({ ...p, gsheets: { ...gs, active: true } })); toast("Google Sheets aktif edildi"); setGsOpen(false); }}><Ic d={I.check} s={15} /> Aktif Et</button>
             </div>
           )}
         </div>
