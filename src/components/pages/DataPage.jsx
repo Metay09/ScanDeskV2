@@ -3,15 +3,19 @@ import { Ic, I } from "../ui/Icon";
 import EditRecordModal from "../modals/EditRecordModal";
 import Modal from "../ui/Modal";
 import { genId } from "../../constants";
-import { toggleSetMember, deriveShiftDate, getShiftDate } from "../../utils";
+import { toggleSetMember, deriveShiftDate, getShiftDate, FIXED_SHIFTS } from "../../utils";
 import { getDynamicFieldValue, FIXED_FIELDS } from "../../services/recordModel";
 
-export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, aciklamalar, settings, toast, isAdmin, currentShift, user, integration, onSyncUpdate }) {
+export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, aciklamalar, settings, toast, isAdmin, currentShift, user, users, integration, onSyncUpdate }) {
   const [q, setQ]           = useState("");
   const [grouped, setGrouped] = useState(true);
   const [editRec, setEditRec] = useState(null);
   const [sel, setSel] = useState(() => new Set());
-  const [pendingImport, setPendingImport] = useState(null); // Admin approval için bekleyen import
+  const [pendingImport, setPendingImport] = useState(null);
+  const [selectedShift, setSelectedShift] = useState(null);
+  const [selectedUser, setSelectedUser]   = useState(null);
+  const [shiftOpen, setShiftOpen]         = useState(false);
+  const [userOpen, setUserOpen]           = useState(false);
   const importRef = useRef(null);
   const toggleSel = (id) => setSel(p => toggleSetMember(p, id));
   const clearSel = () => setSel(new Set());
@@ -214,7 +218,11 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const dynamicF = fields.filter(f => f.id !== "barcode");
   // Admin tüm kayıtları görebilir; normal kullanıcılar mevcut vardiyalarındaki tüm kayıtları görür
   const visibleRecords = isAdmin
-    ? records
+    ? records.filter(r => {
+        if (selectedShift && r.shift !== selectedShift) return false;
+        if (selectedUser  && r.scanned_by_username !== selectedUser) return false;
+        return true;
+      })
     : records.filter(r =>
         r.scanned_by_username === user?.username &&
         r.shift === currentShift &&
@@ -340,17 +348,64 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
 
 
       <div style={{ marginBottom: 10 }}>
-        {/* Search box - standalone, wider */}
+        {/* Search box */}
         <div className="srch" style={{ width: "100%", marginBottom: 8 }}>
           <span className="srch-ico"><Ic d={I.search} s={16} /></span>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Barkod ara..." />
         </div>
 
-        {/* Filter dropdowns - labels inside as first option */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button className={`btn btn-sm ${grouped ? "btn-info" : "btn-ghost"}`} onClick={() => setGrouped(p => !p)}>
             <Ic d={I.group} s={15} /> {grouped ? "Gruplu" : "Liste"}
           </button>
+
+          {/* Admin: Vardiya filtresi */}
+          {isAdmin && (
+            <div style={{ position: "relative" }}>
+              <button
+                className={`btn btn-sm ${selectedShift ? "btn-info" : "btn-ghost"}`}
+                onClick={() => { setShiftOpen(p => !p); setUserOpen(false); }}
+              >
+                <Ic d={I.report} s={14} /> {selectedShift || "Vardiya"}
+              </button>
+              {shiftOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 120, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
+                  {[null, ...FIXED_SHIFTS.map(s => s.label)].map(v => (
+                    <div key={v ?? "__all"} onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
+                      style={{ padding: "10px 14px", cursor: "pointer", fontWeight: v === selectedShift ? 700 : 400, color: v === selectedShift ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                      {v ?? "Tümü"}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Admin: Kullanıcı filtresi */}
+          {isAdmin && (
+            <div style={{ position: "relative" }}>
+              <button
+                className={`btn btn-sm ${selectedUser ? "btn-info" : "btn-ghost"}`}
+                onClick={() => { setUserOpen(p => !p); setShiftOpen(false); }}
+              >
+                <Ic d={I.user} s={14} /> {selectedUser ? (users?.find(u => u.username === selectedUser)?.name || selectedUser) : "Kullanıcı"}
+              </button>
+              {userOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 150, maxHeight: 260, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
+                  {[null, ...(users ?? []).filter(u => u.active !== false)].map(v => {
+                    const uname = v?.username ?? null;
+                    const label = v ? (v.name || v.username) : "Tümü";
+                    return (
+                      <div key={uname ?? "__all"} onClick={() => { setSelectedUser(uname); setUserOpen(false); }}
+                        style={{ padding: "10px 14px", cursor: "pointer", fontWeight: uname === selectedUser ? 700 : 400, color: uname === selectedUser ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                        {label}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
