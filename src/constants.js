@@ -3,6 +3,7 @@ export const DEFAULT_USER_SETTINGS = {
   vibration: true,
   beep: true,
   autoSave: true,
+  enforceBarcodeLengthMatch: true,
   recentLimit: 10,
   theme: "dark",
 };
