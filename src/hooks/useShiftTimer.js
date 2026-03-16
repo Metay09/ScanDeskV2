@@ -44,7 +44,7 @@ export function useShiftTimer(user, isAdmin, userLoginShift, onLogoutRef) {
       if (current !== userLoginShift) {
         inGraceRef.current = true;
         const shiftEnd = getShiftEndTime(userLoginShift);
-        const endTime = shiftEnd
+        const endTime = (shiftEnd && shiftEnd > Date.now())
           ? shiftEnd + GRACE_PERIOD_SECS * 1000
           : Date.now() + GRACE_PERIOD_SECS * 1000;
         setGraceEndTime(endTime);
