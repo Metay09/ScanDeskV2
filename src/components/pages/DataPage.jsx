@@ -212,11 +212,10 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
 
   const allF = [{ id: "barcode", label: "Barkod", type: "Metin" }, ...fields.filter(f => f.id !== "barcode")];
   const dynamicF = fields.filter(f => f.id !== "barcode");
-  // Admin tüm kayıtları görebilir; normal kullanıcılar sadece kendi vardiyalarındaki kendi kayıtlarını görür
+  // Admin tüm kayıtları görebilir; normal kullanıcılar mevcut vardiyalarındaki tüm kayıtları görür
   const visibleRecords = isAdmin
     ? records
     : records.filter(r =>
-        r.scanned_by_username === user?.username &&
         r.shift === currentShift &&
         deriveShiftDate(r) === currentShiftDate
       );
