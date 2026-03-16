@@ -6,7 +6,7 @@ import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords } from "./services/integrations";
+import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
 import { toDbPayload, fromDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
 import { useBackButton } from "./hooks/useBackButton";
@@ -522,10 +522,30 @@ export default function App() {
     } catch { /* sessiz */ }
   }, []);
 
+  const handleSSETaramaEvent = useCallback(async (type, { id }) => {
+    const int = integrationRef.current;
+    if (!int?.postgresApi?.active) return;
+    try {
+      if (type === "deleted") {
+        setRecords(prev => prev.filter(r => r.id !== id));
+        return;
+      }
+      // added veya updated: sunucudan tek kaydı çek
+      const dbRow = await fetchServerRecord(int.postgresApi, id);
+      const rec = normalizeRecord(fromDbPayload(dbRow), fieldsRef.current);
+      if (type === "added") {
+        setRecords(prev => prev.some(r => r.id === id) ? prev : [rec, ...prev]);
+      } else {
+        setRecords(prev => prev.map(r => r.id === id ? rec : r));
+      }
+    } catch { /* sessiz */ }
+  }, []);
+
   useServerSync({
     integration,
     onUsersUpdate: handleSSEUsersUpdate,
     onConfigUpdate: handleSSEConfigUpdate,
+    onTaramaEvent: handleSSETaramaEvent,
   });
 
   const handleSave   = useCallback(r => {

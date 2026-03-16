@@ -56,6 +56,14 @@ export async function fetchServerRecords(cfg, limit = 5000) {
   return r.json();
 }
 
+export async function fetchServerRecord(cfg, id) {
+  const r = await fetch(`${base(cfg)}/api/taramalar/${encodeURIComponent(id)}`, {
+    headers: { "x-api-key": cfg.apiKey },
+  });
+  if (!r.ok) throw new Error(`fetchServerRecord ${r.status}`);
+  return r.json();
+}
+
 // ─── PostgreSQL Kayıt CRUD ───────────────────────────────────────────────────
 
 export async function postgresApiInsert(cfg, row) {
