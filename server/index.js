@@ -39,6 +39,15 @@ function broadcastSSE(event, data = {}) {
 }
 
 // ── Middleware ───────────────────────────────────────────────────────────────
+// CORS — Capacitor APK, tarayıcı ve diğer istemcilerden gelen isteklere izin ver
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-api-key");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json());
 
 // API key hem header'dan hem URL query param'dan kabul edilir
