@@ -3,7 +3,7 @@ import { Ic, I } from "../ui/Icon";
 import EditRecordModal from "../modals/EditRecordModal";
 import Modal from "../ui/Modal";
 import { genId } from "../../constants";
-import { toggleSetMember, deriveShiftDate, getShiftDate, FIXED_SHIFTS } from "../../utils";
+import { toggleSetMember, deriveShiftDate, getShiftDate, fmtDate, FIXED_SHIFTS } from "../../utils";
 import { getDynamicFieldValue, FIXED_FIELDS } from "../../services/recordModel";
 
 export default function DataPage({ fields, records, onDelete, onEdit, onExport, onImport, customers, aciklamalar, settings, toast, isAdmin, currentShift, user, users, integration, onSyncUpdate }) {
@@ -14,6 +14,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const [pendingImport, setPendingImport] = useState(null);
   const [selectedShift, setSelectedShift] = useState(null);
   const [selectedUser, setSelectedUser]   = useState(null);
+  const [selectedDate, setSelectedDate]   = useState(() => fmtDate());
   const [shiftOpen, setShiftOpen]         = useState(false);
   const [userOpen, setUserOpen]           = useState(false);
   const importRef = useRef(null);
@@ -216,9 +217,10 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
 
   const allF = [{ id: "barcode", label: "Barkod", type: "Metin" }, ...fields.filter(f => f.id !== "barcode")];
   const dynamicF = fields.filter(f => f.id !== "barcode");
-  // Admin tüm kayıtları görebilir; normal kullanıcılar mevcut vardiyalarındaki tüm kayıtları görür
+  // Admin tüm kayıtları görebilir; normal kullanıcılar seçili tarihteki kendi kayıtlarını görür
   const visibleRecords = isAdmin
     ? records.filter(r => {
+        if (selectedDate && deriveShiftDate(r) !== selectedDate) return false;
         if (selectedShift && r.shift !== selectedShift) return false;
         if (selectedUser  && r.scanned_by_username !== selectedUser) return false;
         return true;
@@ -358,6 +360,16 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
           <button className={`btn btn-sm ${grouped ? "btn-info" : "btn-ghost"}`} onClick={() => setGrouped(p => !p)}>
             <Ic d={I.group} s={15} /> {grouped ? "Gruplu" : "Liste"}
           </button>
+
+          {/* Admin: Tarih filtresi */}
+          {isAdmin && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              style={{ height: 32, fontSize: 13, border: "1.5px solid var(--brd)", borderRadius: "var(--r)", padding: "0 8px", background: "var(--s1)", color: "var(--tx1)", cursor: "pointer" }}
+            />
+          )}
 
           {/* Admin: Vardiya filtresi */}
           {isAdmin && (
