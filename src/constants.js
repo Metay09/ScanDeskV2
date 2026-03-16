@@ -26,7 +26,8 @@ export const INITIAL_USERS = [
 // tanımlıysa uygulama ilk açılışta PostgreSQL entegrasyonunu otomatik aktif eder.
 export const DEFAULT_POSTGRES_URL = import.meta.env.VITE_SERVER_URL || "";
 export const DEFAULT_POSTGRES_KEY = import.meta.env.VITE_API_KEY || "";
-export const DEFAULT_GSHEETS_URL  = "";
+export const DEFAULT_GSHEETS_URL  = import.meta.env.VITE_GSHEETS_URL || "";
+export const DEFAULT_GSHEETS_ACTIVE = !!import.meta.env.VITE_GSHEETS_URL;
 // Her iki değer de tanımlıysa entegrasyonu başlangıçta aktif aç
 export const DEFAULT_POSTGRES_ACTIVE =
   !!(import.meta.env.VITE_SERVER_URL && import.meta.env.VITE_API_KEY);
