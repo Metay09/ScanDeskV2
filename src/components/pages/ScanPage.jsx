@@ -257,6 +257,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
       barcode: bc,
       timestamp: recordTimestamp,
       shift,
+      shiftDate: getShiftDate(recordTimestamp, shift),
       customer: customer || "",
       aciklama: aciklama || "",
       scanned_by: user.name,
