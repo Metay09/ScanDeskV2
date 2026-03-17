@@ -327,6 +327,22 @@ export default function App() {
             if (sc.settings)                                        setSettings(sc.settings);
           }
 
+          // Global config'den sonra aktif kullanıcının kişisel listelerini uygula
+          // (handleLogin ile aynı davranış — oturum auto-restore'da eksikti)
+          if (st?.activeSession?.username) {
+            const activeName = st.activeSession.username;
+            const activeUser =
+              (serverUsers.status === "fulfilled" ? serverUsers.value : null)
+                ?.find(u => u.username === activeName)
+              ?? loadedUsers.find(u => u.username === activeName);
+            if (activeUser) {
+              if (Array.isArray(activeUser.custList) && activeUser.custList.length)
+                setCustList(activeUser.custList);
+              if (Array.isArray(activeUser.aciklamaList))
+                setAciklamaList(activeUser.aciklamaList);
+            }
+          }
+
           if (serverRecords.status === "fulfilled" && Array.isArray(serverRecords.value)) {
             const appRecords = serverRecords.value.map(r => fromDbPayload(r));
             setRecords(normalizeLoadedRecords(appRecords, loadedFields));
