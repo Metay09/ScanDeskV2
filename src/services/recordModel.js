@@ -180,6 +180,10 @@ export function fromDbPayload(dbRecord) {
     if (dbField === 'custom_fields') {
       // custom_fields → customFields
       record.customFields = value || {};
+    } else if (dbField === 'shift_date') {
+      // Normalize to YYYY-MM-DD: DB may return TIMESTAMP ("2024-01-16T00:00:00.000Z")
+      // or DATE ("2024-01-16") depending on column type — always take the date part only
+      record['shiftDate'] = value ? String(value).slice(0, 10) : null;
     } else {
       // Use mapping if available, otherwise keep as-is
       const appField = DB_TO_FIELD_MAPPING[dbField] || dbField;
