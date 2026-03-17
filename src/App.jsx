@@ -532,7 +532,9 @@ export default function App() {
       }
       // added veya updated: sunucudan tek kaydı çek
       const dbRow = await fetchServerRecord(int.postgresApi, id);
-      const rec = normalizeRecord(fromDbPayload(dbRow), fieldsRef.current);
+      const normalized = normalizeRecord(fromDbPayload(dbRow), fieldsRef.current);
+      const sd = deriveShiftDate(normalized);
+      const rec = sd ? { ...normalized, shiftDate: sd } : normalized;
       if (type === "added") {
         setRecords(prev => prev.some(r => r.id === id) ? prev : [rec, ...prev]);
       } else {
