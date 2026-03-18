@@ -99,6 +99,12 @@ export default function ReportPage({
     [extraCols, customFieldCols]
   );
 
+  // ── Admin / non-admin filtresi — useEffect'lerden ÖNCE tanımlanmalı ─────────
+  const baseRecords = useMemo(() => {
+    if (isAdmin) return records;
+    return records.filter(r => r.shift === currentShift);
+  }, [records, isAdmin, currentShift]);
+
   // Ekstra Excel kolonları değişince visibleCols'a ekle (varsayılan: görünür)
   useEffect(() => {
     if (!extraCols.length) return;
@@ -146,12 +152,6 @@ export default function ReportPage({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openFilter, showColPicker]);
-
-  // ── Admin / non-admin filtresi ──────────────────────────────────────────────
-  const baseRecords = useMemo(() => {
-    if (isAdmin) return records;
-    return records.filter(r => r.shift === currentShift);
-  }, [records, isAdmin, currentShift]);
 
   // ── Referans tabloyla birleştir ─────────────────────────────────────────────
   const tableRows = useMemo(() => {
