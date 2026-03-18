@@ -48,8 +48,8 @@ export default function App() {
   // Startup sonrası gösterilecek bildirimler
   const [pendingNotification, setPendingNotification] = useState(null); // { msg, color }
   const [adminSyncWarning, setAdminSyncWarning] = useState(false);
-  const [refTable, setRefTable]   = useState({});
-  const [refColMap, setRefColMap] = useState(null);
+  const [refTable, setRefTable]   = useState(() => loadReferenceTable());
+  const [refColMap, setRefColMap] = useState(() => loadColMap());
 
   // Refs for current config values — sunucu push'unda her zaman güncel değeri yakalar
   const fieldsRef       = useRef(fields);
