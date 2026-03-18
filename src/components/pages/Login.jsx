@@ -14,28 +14,14 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
     if (loading) return;
     setErr("");
 
-    const username = u.trim();
+    const isAdminUser = u.trim() === "admin";
+    const useServer = !isAdminUser && integration?.postgresApi?.active;
 
-    // Önce yerel kullanıcılarda ara
-    const localFound = users.find(x => x.username === username && x.active !== false);
-    if (localFound) {
-      const ok = await verifyPassword(p, localFound.password);
-      if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
-      if (!localFound.password.startsWith("pbkdf2:")) {
-        const hashed = await hashPassword(p);
-        onMigratePassword?.(localFound.id, hashed);
-      }
-      onLogin(localFound, null);
-      return;
-    }
-
-    // Yerel bulunamadı, sunucu aktifse sunucudan dene
-    const useServer = username !== "admin" && integration?.postgresApi?.active;
     if (useServer) {
       setLoading(true);
       try {
         const serverUsers = await fetchServerUsers(integration.postgresApi);
-        const found = serverUsers.find(x => x.username === username && x.active !== false);
+        const found = serverUsers.find(x => x.username === u.trim() && x.active !== false);
         if (!found) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
         const ok = await verifyPassword(p, found.password);
         if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
@@ -50,7 +36,15 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         setLoading(false);
       }
     } else {
-      setErr("Kullanıcı adı veya şifre hatalı.");
+      const found = users.find(x => x.username === u.trim() && x.active !== false);
+      if (!found) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
+      const ok = await verifyPassword(p, found.password);
+      if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
+      if (!found.password.startsWith("pbkdf2:")) {
+        const hashed = await hashPassword(p);
+        onMigratePassword?.(found.id, hashed);
+      }
+      onLogin(found, null);
     }
   };
 

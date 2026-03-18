@@ -76,14 +76,14 @@ export default function App() {
       aciklamaList: aciklamaListRef.current,
       settings:     settingsRef.current,
       ...patch,
-    }).catch(e => console.warn("[syncConfigToServer]", e?.message));
+    }).catch(() => {});
   }, []);
 
   /** Kullanıcı listesini sunucuya iter. */
   const syncUsersToServer = useCallback((updatedUsers) => {
     const int = integrationRef.current;
     if (!int.postgresApi?.active) return;
-    pushServerUsers(int.postgresApi, updatedUsers).catch(e => console.warn("[syncUsersToServer]", e?.message));
+    pushServerUsers(int.postgresApi, updatedUsers).catch(() => {});
   }, []);
 
   // İnternet gelince: sunucudan çek → merge → eksik local kullanıcıları push et
@@ -285,7 +285,7 @@ export default function App() {
             const finalMerged = hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
             setUsers(finalMerged);
             if (localOnly.length > 0) {
-              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(e => console.warn("[pushServerUsers hydrate]", e?.message));
+              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(() => {});
             }
 
             // ── Aktif oturum yenileme (Madde 2) ──────────────────────────
@@ -545,7 +545,7 @@ export default function App() {
         if (changed) setPendingNotification({ msg: "Hesap bilgileriniz sunucudan güncellendi.", color: "var(--inf)" });
         return serverUser;
       });
-    } catch (e) { console.warn("[handleSSEUsersUpdate]", e?.message); }
+    } catch { /* sessiz */ }
   }, []);
 
   const handleSSEConfigUpdate = useCallback(async () => {
@@ -558,7 +558,7 @@ export default function App() {
       if (Array.isArray(sc.custList) && sc.custList.length) setCustList(sc.custList);
       if (Array.isArray(sc.aciklamaList)) setAciklamaList(sc.aciklamaList);
       if (sc.settings) setSettings(sc.settings);
-    } catch (e) { console.warn("[handleSSEConfigUpdate]", e?.message); }
+    } catch { /* sessiz */ }
   }, []);
 
   const handleSSETaramaEvent = useCallback(async (type, { id }) => {
@@ -579,7 +579,7 @@ export default function App() {
       } else {
         setRecords(prev => prev.map(r => r.id === id ? rec : r));
       }
-    } catch (e) { console.warn("[handleSSETaramaEvent]", e?.message); }
+    } catch { /* sessiz */ }
   }, []);
 
   const handleRefTableSave = useCallback(async (table, colMap) => {
@@ -622,7 +622,7 @@ export default function App() {
         setRefColMap(colMap);
         saveReferenceTable(table, colMap);
       }
-    } catch (e) { console.warn("[handleSSERefTableUpdate]", e?.message); }
+    } catch { /* sessiz */ }
   }, []);
 
   useServerSync({

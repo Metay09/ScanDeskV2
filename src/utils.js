@@ -104,7 +104,7 @@ export async function verifyPassword(plain, stored) {
     const recomputed = await hashPassword(plain, saltHex);
     return recomputed === stored;
   }
-  // legacy plaintext şifre — doğru ise kabul et, Login giriş sonrası hash'ler
+  // legacy: plaintext stored before hashing was introduced
   return plain === stored;
 }
 
