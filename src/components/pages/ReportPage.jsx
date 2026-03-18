@@ -6,6 +6,7 @@ import {
   getReferenceTableMeta,
 } from "../../services/referenceTable";
 import { isNative } from "../../services/storage";
+import { getDynamicFieldValue } from "../../services/recordModel";
 
 // ── Temel sabit kolonlar ──────────────────────────────────────────────────────
 const BASE_COLS = [
@@ -23,7 +24,7 @@ const BASE_COLS = [
 ];
 
 // Varsayılan gizli kolonlar
-const HIDDEN_BY_DEFAULT = new Set(["skt", "aciklama", "taramaNotu"]);
+const HIDDEN_BY_DEFAULT = new Set(["skt", "aciklama"]);
 
 const MAPPER_FIELDS = [
   { field: "paletKodu", label: "Palet Kodu", required: true },
@@ -85,9 +86,20 @@ export default function ReportPage({
       .map(([k]) => ({ id: `ex_${k.slice(7)}`, label: k.slice(7), fixed: false }));
   }, [refColMap]);
 
-  const allCols = useMemo(() => [...BASE_COLS, ...extraCols], [extraCols]);
+  // Custom (dinamik) uygulama alanları — barcode hariç fields prop'tan
+  const customFieldCols = useMemo(() => {
+    if (!fields?.length) return [];
+    return fields
+      .filter(f => f.id !== "barcode")
+      .map(f => ({ id: `cf_${f.id}`, label: f.label, fixed: false, fieldId: f.id }));
+  }, [fields]);
 
-  // Ekstra kolonlar değişince visibleCols'a ekle (varsayılan: görünür)
+  const allCols = useMemo(
+    () => [...BASE_COLS, ...extraCols, ...customFieldCols],
+    [extraCols, customFieldCols]
+  );
+
+  // Ekstra Excel kolonları değişince visibleCols'a ekle (varsayılan: görünür)
   useEffect(() => {
     if (!extraCols.length) return;
     setVisibleCols(prev => {
@@ -99,6 +111,25 @@ export default function ReportPage({
       return changed ? next : prev;
     });
   }, [extraCols]);
+
+  // Custom uygulama alanları: veri varsa görünür, yoksa gizli
+  useEffect(() => {
+    if (!customFieldCols.length) return;
+    setVisibleCols(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const col of customFieldCols) {
+        if (col.id in next) continue;
+        const hasData = baseRecords.some(r => {
+          const v = getDynamicFieldValue(r, col.fieldId);
+          return v !== undefined && v !== null && v !== "";
+        });
+        next[col.id] = hasData;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [customFieldCols, baseRecords]);
 
   // ── Dışarı tıklama: popup'ları kapat ───────────────────────────────────────
   useEffect(() => {
@@ -144,9 +175,13 @@ export default function ReportPage({
       for (const col of extraCols) {
         row[col.id] = extras[col.label] || "";
       }
+      for (const col of customFieldCols) {
+        const v = getDynamicFieldValue(record, col.fieldId);
+        row[col.id] = v !== undefined && v !== null ? String(v) : "";
+      }
       return row;
     });
-  }, [baseRecords, refTable, extraCols]);
+  }, [baseRecords, refTable, extraCols, customFieldCols]);
 
   // ── Kolon filtresi uygula ───────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
