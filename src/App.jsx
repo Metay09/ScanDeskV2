@@ -713,10 +713,7 @@ export default function App() {
       if (integration.gsheets?.active) {
         recordsToDelete.forEach(record => {
           sheetsDelete(integration.gsheets, record.id)
-            .catch(e => {
-              // Network error - just log it
-              console.error("Sheets silme hatası:", e);
-            });
+            .catch(() => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
         });
         if (recordsToDelete.length > 0) {
           toast(`Google Sheets'den ${recordsToDelete.length} kayıt siliniyor...`, "var(--acc)");
@@ -764,10 +761,7 @@ export default function App() {
     if (integration.gsheets?.active) {
       recordsToDelete.forEach(record => {
         sheetsDelete(integration.gsheets, record.id)
-          .catch(e => {
-            // Network error - just log it
-            console.error("Sheets silme hatası:", e);
-          });
+          .catch(() => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
       });
       if (recordsToDelete.length > 0) {
         toast(`Google Sheets'den ${recordsToDelete.length} kayıt siliniyor...`, "var(--acc)");
