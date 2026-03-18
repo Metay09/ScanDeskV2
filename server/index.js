@@ -39,11 +39,24 @@ function broadcastSSE(event, data = {}) {
 }
 
 // ── Middleware ───────────────────────────────────────────────────────────────
-// CORS — Capacitor APK, tarayıcı ve diğer istemcilerden gelen isteklere izin ver
+// CORS — Capacitor APK ve izinli origin'lerden gelen isteklere izin ver
+// ALLOWED_ORIGINS env: virgülle ayrılmış origin listesi (örn: "https://app.example.com,capacitor://localhost")
+// Boş bırakılırsa tüm origin'lere izin verilir (geliştirme için)
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean)
+  : [];
+
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.length === 0 || !origin || ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-api-key");
+  // Güvenlik header'ları
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
@@ -101,13 +114,16 @@ app.get("/api/taramalar", requireApiKey, async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("[taramalar GET]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
 app.post("/api/taramalar", requireApiKey, async (req, res) => {
   try {
     const r = req.body;
+    if (!r || !r.id || !r.barcode) {
+      return res.status(400).json({ error: "id ve barcode zorunlu" });
+    }
     await pool.query(
       `INSERT INTO taramalar
          (id, barcode, timestamp, shift, shift_date, customer, aciklama,
@@ -130,7 +146,7 @@ app.post("/api/taramalar", requireApiKey, async (req, res) => {
     res.status(201).json({ ok: true });
   } catch (err) {
     console.error("[taramalar POST]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -160,7 +176,7 @@ app.patch("/api/taramalar/:id", requireApiKey, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("[taramalar PATCH]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -171,7 +187,7 @@ app.get("/api/taramalar/:id", requireApiKey, async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error("[taramalar GET/:id]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -182,7 +198,7 @@ app.delete("/api/taramalar/:id", requireApiKey, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("[taramalar DELETE]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -208,7 +224,7 @@ app.get("/api/users", requireApiKey, async (req, res) => {
     res.json((await getState("users")) || []);
   } catch (err) {
     console.error("[users GET]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -220,7 +236,7 @@ app.put("/api/users", requireApiKey, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("[users PUT]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -231,7 +247,7 @@ app.get("/api/app-config", requireApiKey, async (req, res) => {
     res.json((await getState("app_config")) || {});
   } catch (err) {
     console.error("[app-config GET]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -245,7 +261,7 @@ app.put("/api/app-config", requireApiKey, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("[app-config PUT]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -258,7 +274,7 @@ app.get("/api/ref-table", requireApiKey, async (req, res) => {
     res.json({ table, colMap });
   } catch (err) {
     console.error("[ref-table GET]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 
@@ -274,7 +290,7 @@ app.put("/api/ref-table", requireApiKey, async (req, res) => {
     res.json({ ok: true, count: Object.keys(table).length });
   } catch (err) {
     console.error("[ref-table PUT]", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sunucu hatası" });
   }
 });
 

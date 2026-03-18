@@ -104,8 +104,9 @@ export async function verifyPassword(plain, stored) {
     const recomputed = await hashPassword(plain, saltHex);
     return recomputed === stored;
   }
-  // legacy: plaintext stored before hashing was introduced
-  return plain === stored;
+  // legacy plaintext şifreler artık desteklenmiyor — güvenlik için reddedilir
+  // Kullanıcı şifresini admin panelinden sıfırlamalıdır
+  return false;
 }
 
 export function playBeep() {
