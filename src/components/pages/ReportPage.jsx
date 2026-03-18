@@ -34,7 +34,6 @@ const MAPPER_FIELDS = [
   { field: "lotNo",     label: "Lot No" },
   { field: "tarih",     label: "Tarih" },
   { field: "skt",       label: "SKT" },
-  { field: "aciklama",  label: "Açıklama" },
 ];
 
 function fmtMetaDate(iso) {
