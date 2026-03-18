@@ -16,7 +16,7 @@ import { useEffect, useRef, useCallback } from "react";
  * @param {function} onConfigUpdate - sunucudan güncel config'i çek
  * @param {function} [onTaramaEvent] - (type: "added"|"updated"|"deleted", data: {id}) => void
  */
-export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTaramaEvent }) {
+export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTaramaEvent, onRefTableUpdate }) {
   const esRef         = useRef(null);
   const pollingRef    = useRef(null);
   const reconnectRef  = useRef(null);
@@ -27,9 +27,11 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
   const onUsersUpdateRef   = useRef(onUsersUpdate);
   const onConfigUpdateRef  = useRef(onConfigUpdate);
   const onTaramaEventRef   = useRef(onTaramaEvent);
+  const onRefTableUpdateRef = useRef(onRefTableUpdate);
   useEffect(() => { onUsersUpdateRef.current  = onUsersUpdate;  }, [onUsersUpdate]);
   useEffect(() => { onConfigUpdateRef.current = onConfigUpdate; }, [onConfigUpdate]);
   useEffect(() => { onTaramaEventRef.current  = onTaramaEvent;  }, [onTaramaEvent]);
+  useEffect(() => { onRefTableUpdateRef.current = onRefTableUpdate; }, [onRefTableUpdate]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -75,6 +77,10 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
 
     es.addEventListener("config_updated", () => {
       onConfigUpdateRef.current?.().catch(() => {});
+    });
+
+    es.addEventListener("ref_table_updated", () => {
+      onRefTableUpdateRef.current?.().catch(() => {});
     });
 
     es.addEventListener("tarama_added", (e) => {
