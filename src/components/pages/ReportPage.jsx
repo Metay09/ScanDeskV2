@@ -34,6 +34,7 @@ const MAPPER_FIELDS = [
   { field: "tarih",     label: "Tarih" },
   { field: "skt",       label: "SKT" },
   { field: "aciklama",  label: "Açıklama" },
+  { field: "musteri",   label: "Müşteri" },
 ];
 
 function fmtMetaDate(iso) {
@@ -129,7 +130,7 @@ export default function ReportPage({
       const extras = ref._extras || {};
       const row = {
         paletKodu:   record.barcode             || "",
-        musteri:     record.customer            || "",
+        musteri:     record.customer || ref.musteri || "",
         kullanici:   record.scanned_by_username || "",
         taramaNotu:  record.aciklama            || "",
         stokAdi:     ref.stokAdi   || "",

@@ -69,6 +69,7 @@ export const COL_CANDIDATES = {
   tarih:     ["üretim tarihi", "uretim tarihi", "tarih", "production date", "date"],
   skt:       ["son kul. tarihi", "son kullanma tarihi", "skt", "son kullanım tarihi", "exp"],
   aciklama:  ["açıklama", "aciklama", "adreslenecek k", "adreslenecek", "notlar", "note"],
+  musteri:   ["müşteri", "musteri", "customer", "firma", "şirket", "sirket", "alıcı", "alici"],
 };
 
 // Alan etiket isimleri (tablo başlıklarında gösterim için)
@@ -133,6 +134,7 @@ function rowToRecord(row, colMap) {
     tarih:    normalizeDate(get("tarih")),
     skt:      normalizeDate(get("skt")),
     aciklama: String(get("aciklama") || "").trim(),
+    musteri:  String(get("musteri")  || "").trim(),
     ...(Object.keys(_extras).length ? { _extras } : {}),
   };
 }
