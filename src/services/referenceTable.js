@@ -114,16 +114,26 @@ function rowToRecord(row, colMap) {
 
   const lotNo = String(get("lotNo") || "").trim();
 
+  // Ekstra kolonlar (_extra_ önekiyle colMap'e kaydedilmiş özel alanlar)
+  const _extras = {};
+  for (const [k, v] of Object.entries(colMap)) {
+    if (k.startsWith("_extra_") && v) {
+      const label = k.slice(7);
+      _extras[label] = String(row[v] ?? "").trim();
+    }
+  }
+
   return {
     paletKodu,
     stokAdi:  String(get("stokAdi")  || "").trim(),
     miktar:   get("miktar")   !== "" ? String(get("miktar"))   : "",
     koliAdet: get("koliAdet") !== "" ? String(get("koliAdet")) : "",
     lotNo,
-    tarihLT:  lotNo ? (lotToDate(lotNo) || "") : "",  // Lot varsa hesapla
-    tarih:    normalizeDate(get("tarih")),              // Her zaman Excel'den
+    tarihLT:  lotNo ? (lotToDate(lotNo) || "") : "",
+    tarih:    normalizeDate(get("tarih")),
     skt:      normalizeDate(get("skt")),
     aciklama: String(get("aciklama") || "").trim(),
+    ...(Object.keys(_extras).length ? { _extras } : {}),
   };
 }
 

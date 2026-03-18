@@ -1,22 +1,29 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import {
   lookupPalet, guessColMap, buildTableFromRows,
-  getReferenceTableMeta, COL_LABELS,
+  getReferenceTableMeta,
 } from "../../services/referenceTable";
+import { isNative } from "../../services/storage";
 
-// ── Sabit kolon tanımları ─────────────────────────────────────────────────────
-const COLS = [
-  { id: "paletKodu", label: "Palet Kodu",  fixed: true  },
-  { id: "stokAdi",   label: "Stok Adı",    fixed: false },
-  { id: "miktar",    label: "Miktar",       fixed: false },
-  { id: "koliAdet",  label: "Koli Adet",   fixed: false },
-  { id: "tarihLT",   label: "Tarih (LT)",  fixed: false },
-  { id: "tarih",     label: "Tarih",       fixed: false },
-  { id: "skt",       label: "SKT",         fixed: false },
-  { id: "aciklama",  label: "Açıklama",    fixed: false },
-  { id: "musteri",   label: "Müşteri",     fixed: false },
-  { id: "kullanici", label: "Kullanıcı",   fixed: false },
+// ── Temel sabit kolonlar ──────────────────────────────────────────────────────
+const BASE_COLS = [
+  { id: "paletKodu",  label: "Palet Kodu",       fixed: true  },
+  { id: "stokAdi",    label: "Stok Adı",          fixed: false },
+  { id: "miktar",     label: "Miktar",             fixed: false },
+  { id: "koliAdet",   label: "Koli Adet",          fixed: false },
+  { id: "tarihLT",    label: "Tarih (LT)",         fixed: false },
+  { id: "tarih",      label: "Tarih",              fixed: false },
+  { id: "skt",        label: "SKT",                fixed: false },
+  { id: "aciklama",   label: "Ref. Açıklama",      fixed: false },
+  { id: "musteri",    label: "Müşteri",            fixed: false },
+  { id: "taramaNotu", label: "Tarama Açıklama",    fixed: false },
+  { id: "kullanici",  label: "Kullanıcı",          fixed: false },
 ];
+
+// Varsayılan gizli kolonlar
+const HIDDEN_BY_DEFAULT = new Set(["skt", "aciklama", "taramaNotu"]);
 
 const MAPPER_FIELDS = [
   { field: "paletKodu", label: "Palet Kodu", required: true },
@@ -47,19 +54,21 @@ export default function ReportPage({
   refColMap,
   onRefTableSave,
   onRefTableClear,
+  toast,
 }) {
   // ── Upload / Mapper state ───────────────────────────────────────────────────
   const [showMapper, setShowMapper]         = useState(false);
   const [pendingRows, setPendingRows]       = useState([]);
   const [pendingHeaders, setPendingHeaders] = useState([]);
   const [colMapDraft, setColMapDraft]       = useState({});
+  const [extraMappings, setExtraMappings]   = useState([]); // { label, header }[]
   const [uploading, setUploading]           = useState(false);
   const [uploadErr, setUploadErr]           = useState("");
   const [dragOver, setDragOver]             = useState(false);
 
   // ── Tablo state ─────────────────────────────────────────────────────────────
   const [visibleCols, setVisibleCols] = useState(
-    () => Object.fromEntries(COLS.map(c => [c.id, c.id !== "skt" && c.id !== "aciklama"]))
+    () => Object.fromEntries(BASE_COLS.map(c => [c.id, !HIDDEN_BY_DEFAULT.has(c.id)]))
   );
   const [colFilters, setColFilters]   = useState({});
   const [openFilter, setOpenFilter]   = useState(null);
@@ -67,6 +76,29 @@ export default function ReportPage({
 
   const fileRef    = useRef(null);
   const filterRefs = useRef({});
+
+  // ── Dinamik ekstra kolonlar (colMap'teki _extra_ alanlarından) ──────────────
+  const extraCols = useMemo(() => {
+    if (!refColMap) return [];
+    return Object.entries(refColMap)
+      .filter(([k]) => k.startsWith("_extra_"))
+      .map(([k]) => ({ id: `ex_${k.slice(7)}`, label: k.slice(7), fixed: false }));
+  }, [refColMap]);
+
+  const allCols = useMemo(() => [...BASE_COLS, ...extraCols], [extraCols]);
+
+  // Ekstra kolonlar değişince visibleCols'a ekle (varsayılan: görünür)
+  useEffect(() => {
+    if (!extraCols.length) return;
+    setVisibleCols(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const col of extraCols) {
+        if (!(col.id in next)) { next[col.id] = true; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [extraCols]);
 
   // ── Dışarı tıklama: popup'ları kapat ───────────────────────────────────────
   useEffect(() => {
@@ -94,21 +126,27 @@ export default function ReportPage({
   const tableRows = useMemo(() => {
     return baseRecords.map(record => {
       const ref = lookupPalet(refTable, record.barcode) || {};
-      return {
-        paletKodu: record.barcode            || "",
-        musteri:   record.customer           || "",
-        kullanici: record.scanned_by_username || "",
-        stokAdi:   ref.stokAdi   || "",
-        miktar:    ref.miktar    || "",
-        koliAdet:  ref.koliAdet  || "",
-        tarihLT:   ref.tarihLT   || "",
-        tarih:     ref.tarih     || "",
-        skt:       ref.skt       || "",
-        aciklama:  ref.aciklama  || "",
-        matched:   !!ref.stokAdi,
+      const extras = ref._extras || {};
+      const row = {
+        paletKodu:   record.barcode             || "",
+        musteri:     record.customer            || "",
+        kullanici:   record.scanned_by_username || "",
+        taramaNotu:  record.aciklama            || "",
+        stokAdi:     ref.stokAdi   || "",
+        miktar:      ref.miktar    || "",
+        koliAdet:    ref.koliAdet  || "",
+        tarihLT:     ref.tarihLT   || "",
+        tarih:       ref.tarih     || "",
+        skt:         ref.skt       || "",
+        aciklama:    ref.aciklama  || "",
+        matched:     !!ref.stokAdi,
       };
+      for (const col of extraCols) {
+        row[col.id] = extras[col.label] || "";
+      }
+      return row;
     });
-  }, [baseRecords, refTable]);
+  }, [baseRecords, refTable, extraCols]);
 
   // ── Kolon filtresi uygula ───────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -125,7 +163,7 @@ export default function ReportPage({
     koliAdet: filteredRows.reduce((s, r) => s + (parseInt(r.koliAdet)  || 0), 0),
   }), [filteredRows]);
 
-  const activeCols = useMemo(() => COLS.filter(c => visibleCols[c.id]), [visibleCols]);
+  const activeCols = useMemo(() => allCols.filter(c => visibleCols[c.id]), [allCols, visibleCols]);
 
   const meta     = getReferenceTableMeta();
   const hasTable = refTable && Object.keys(refTable).length > 0;
@@ -146,20 +184,29 @@ export default function ReportPage({
       const headers = Object.keys(rows[0]);
       setPendingRows(rows);
       setPendingHeaders(headers);
-      setColMapDraft(guessColMap(headers));
+      const guessed = guessColMap(headers);
+      setColMapDraft(guessed);
+      // Mevcut ekstra kolonları yükle
+      if (refColMap) {
+        const prevExtras = Object.entries(refColMap)
+          .filter(([k]) => k.startsWith("_extra_"))
+          .map(([k]) => ({ label: k.slice(7), header: "" }));
+        setExtraMappings(prevExtras);
+      } else {
+        setExtraMappings([]);
+      }
       setShowMapper(true);
     } catch {
       setUploadErr("Dosya okunurken hata oluştu.");
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [refColMap]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) parseFile(file);
+    parseFile(e.dataTransfer?.files?.[0]);
   }, [parseFile]);
 
   // ── Mapper onayla ───────────────────────────────────────────────────────────
@@ -168,13 +215,21 @@ export default function ReportPage({
       setUploadErr("Palet Kodu kolonunu seçmelisiniz.");
       return;
     }
-    const table = buildTableFromRows(pendingRows, colMapDraft);
-    onRefTableSave(table, colMapDraft);
+    // Ekstra kolonları colMap'e ekle
+    const finalColMap = { ...colMapDraft };
+    for (const em of extraMappings) {
+      if (em.label.trim() && em.header) {
+        finalColMap[`_extra_${em.label.trim()}`] = em.header;
+      }
+    }
+    const table = buildTableFromRows(pendingRows, finalColMap);
+    onRefTableSave(table, finalColMap);
     setShowMapper(false);
     setUploadErr("");
     setPendingRows([]);
     setPendingHeaders([]);
-  }, [colMapDraft, pendingRows, onRefTableSave]);
+    setExtraMappings([]);
+  }, [colMapDraft, extraMappings, pendingRows, onRefTableSave]);
 
   // ── Filtre yardımcıları ─────────────────────────────────────────────────────
   const getColUniqueVals = useCallback((colId) => {
@@ -190,28 +245,60 @@ export default function ReportPage({
     });
   };
 
-  const clearColFilter = (colId) => {
-    setColFilters(prev => { const n = { ...prev }; delete n[colId]; return n; });
-  };
-
-  const selectAllColFilter = (colId) => {
-    setColFilters(prev => ({ ...prev, [colId]: new Set(getColUniqueVals(colId)) }));
-  };
-
-  const hasFilter = (colId) => colFilters[colId]?.size > 0;
+  const clearColFilter   = (colId) => setColFilters(prev => { const n = { ...prev }; delete n[colId]; return n; });
+  const selectAllFilter  = (colId) => setColFilters(prev => ({ ...prev, [colId]: new Set(getColUniqueVals(colId)) }));
+  const hasFilter        = (colId) => colFilters[colId]?.size > 0;
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const handleExport = async (type) => {
+    if (!filteredRows.length) {
+      toast?.("Dışa aktarılacak kayıt yok", "var(--acc)");
+      return;
+    }
+    const hdr  = activeCols.map(c => c.label);
+    const data = filteredRows.map(r => activeCols.map(c => String(r[c.id] ?? "")));
+    const filename = `rapor_${new Date().toISOString().slice(0, 10)}`;
+
     try {
-      const XLSX = await import("xlsx");
-      const hdr  = activeCols.map(c => c.label);
-      const data = filteredRows.map(r => activeCols.map(c => r[c.id] ?? ""));
-      const ws   = XLSX.utils.aoa_to_sheet([hdr, ...data]);
-      const wb   = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Rapor");
-      if (type === "csv") XLSX.writeFile(wb, "rapor.csv", { bookType: "csv" });
-      else                XLSX.writeFile(wb, "rapor.xlsx");
-    } catch { /* sessiz */ }
+      if (type === "xlsx") {
+        const XLSX = await import("xlsx");
+        const ws = XLSX.utils.aoa_to_sheet([hdr, ...data]);
+        ws["!cols"] = hdr.map(() => ({ wch: 18 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rapor");
+        if (isNative()) {
+          const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+          const fn = filename + ".xlsx";
+          await Filesystem.writeFile({ path: fn, data: b64, directory: Directory.Cache });
+          const { uri } = await Filesystem.getUri({ directory: Directory.Cache, path: fn });
+          await Share.share({ title: "ScanDesk Rapor", url: uri });
+          toast?.("Excel hazır (Paylaş)", "var(--ok)");
+        } else {
+          XLSX.writeFile(wb, filename + ".xlsx");
+          toast?.("Excel indirildi", "var(--ok)");
+        }
+      } else {
+        const csv = [hdr, ...data]
+          .map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+          .join("\n");
+        if (isNative()) {
+          const fn = filename + ".csv";
+          await Filesystem.writeFile({ path: fn, data: "\uFEFF" + csv, directory: Directory.Cache, encoding: Encoding.UTF8 });
+          const { uri } = await Filesystem.getUri({ directory: Directory.Cache, path: fn });
+          await Share.share({ title: "ScanDesk Rapor", url: uri });
+          toast?.("CSV hazır (Paylaş)", "var(--ok)");
+        } else {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
+          a.download = filename + ".csv";
+          a.click();
+          toast?.("CSV indirildi", "var(--ok)");
+        }
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      toast?.("Dışa aktarma hatası: " + (err?.message || err), "var(--err)");
+    }
   };
 
   // ── Yükleme alanı ──────────────────────────────────────────────────────────
@@ -224,11 +311,9 @@ export default function ReportPage({
     >
       <div className="rp-upload-icon">{uploading ? "⏳" : "📂"}</div>
       <div className="rp-upload-text">
-        {uploading
-          ? "Dosya okunuyor…"
-          : compact
-            ? "Yeni Excel/CSV yükle"
-            : "Excel veya CSV dosyasını buraya sürükleyin"}
+        {uploading ? "Dosya okunuyor…"
+          : compact ? "Yeni Excel/CSV yükle"
+          : "Excel veya CSV dosyasını buraya sürükleyin"}
       </div>
       {!compact && <div className="rp-upload-sub">.xlsx ve .csv desteklenir</div>}
       <button
@@ -266,11 +351,7 @@ export default function ReportPage({
         </div>
         <div className="rp-topbar-right">
           {anyFilter && (
-            <button
-              className="btn btn-sm"
-              style={{ color: "var(--acc)" }}
-              onClick={() => setColFilters({})}
-            >
+            <button className="btn btn-sm" style={{ color: "var(--acc)" }} onClick={() => setColFilters({})}>
               Filtreyi Temizle
             </button>
           )}
@@ -279,15 +360,12 @@ export default function ReportPage({
               <button className="btn btn-sm btn-ghost" onClick={() => handleExport("csv")}>CSV</button>
               <button className="btn btn-sm btn-ghost" onClick={() => handleExport("xlsx")}>XLSX</button>
               <div style={{ position: "relative" }} id="rp-col-picker">
-                <button
-                  className="btn btn-sm btn-ghost"
-                  onClick={() => setShowColPicker(p => !p)}
-                >
+                <button className="btn btn-sm btn-ghost" onClick={() => setShowColPicker(p => !p)}>
                   Kolonlar ☰
                 </button>
                 {showColPicker && (
                   <div className="rp-col-picker-menu">
-                    {COLS.map(c => (
+                    {allCols.map(c => (
                       <label key={c.id} className="rp-col-picker-item">
                         <input
                           type="checkbox"
@@ -346,12 +424,9 @@ export default function ReportPage({
                         </button>
 
                         {openFilter === col.id && (
-                          <div
-                            className="rp-filter-popup"
-                            onClick={e => e.stopPropagation()}
-                          >
+                          <div className="rp-filter-popup" onClick={e => e.stopPropagation()}>
                             <div className="rp-filter-actions">
-                              <button className="btn btn-sm btn-ghost" onClick={() => selectAllColFilter(col.id)}>Tümü</button>
+                              <button className="btn btn-sm btn-ghost" onClick={() => selectAllFilter(col.id)}>Tümü</button>
                               <button className="btn btn-sm btn-ghost" onClick={() => clearColFilter(col.id)}>Temizle</button>
                             </div>
                             <div className="rp-filter-list">
@@ -422,6 +497,8 @@ export default function ReportPage({
             <div className="rp-modal-sub">
               {pendingRows.length} satır okundu. Her alana karşılık gelen Excel kolonunu seçin.
             </div>
+
+            {/* Standart alanlar */}
             <div className="rp-mapper-grid">
               {MAPPER_FIELDS.map(({ field, label, required }) => (
                 <div key={field} className="rp-mapper-row">
@@ -432,20 +509,57 @@ export default function ReportPage({
                   <select
                     className="rp-mapper-select"
                     value={colMapDraft[field] || ""}
-                    onChange={e => setColMapDraft(p => ({
-                      ...p,
-                      [field]: e.target.value || undefined,
-                    }))}
+                    onChange={e => setColMapDraft(p => ({ ...p, [field]: e.target.value || undefined }))}
                   >
                     <option value="">— Seçilmedi —</option>
-                    {pendingHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
+                    {pendingHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
               ))}
             </div>
-            {uploadErr && <div className="rp-upload-err">{uploadErr}</div>}
+
+            {/* Ekstra kolonlar */}
+            <div className="rp-mapper-extras-hd">
+              Ekstra Kolonlar
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => setExtraMappings(p => [...p, { label: "", header: "" }])}
+              >
+                + Ekle
+              </button>
+            </div>
+            {extraMappings.length === 0 && (
+              <div className="rp-mapper-extras-empty">
+                Tabloya ekstra kolon eklemek için "+ Ekle" butonuna basın.
+              </div>
+            )}
+            {extraMappings.map((em, i) => (
+              <div key={i} className="rp-mapper-extra-row">
+                <input
+                  className="rp-mapper-extra-name"
+                  placeholder="Kolon adı"
+                  value={em.label}
+                  onChange={e => setExtraMappings(p => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                />
+                <span className="rp-mapper-extra-arrow">→</span>
+                <select
+                  className="rp-mapper-select"
+                  value={em.header}
+                  onChange={e => setExtraMappings(p => p.map((x, j) => j === i ? { ...x, header: e.target.value } : x))}
+                >
+                  <option value="">— Excel kolonu —</option>
+                  {pendingHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <button
+                  className="rp-mapper-extra-del"
+                  onClick={() => setExtraMappings(p => p.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            {uploadErr && <div className="rp-upload-err" style={{ marginTop: 8 }}>{uploadErr}</div>}
             <div className="rp-modal-actions">
               <button
                 className="btn btn-ghost btn-sm"
