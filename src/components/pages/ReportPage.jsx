@@ -34,7 +34,6 @@ const MAPPER_FIELDS = [
   { field: "tarih",     label: "Tarih" },
   { field: "skt",       label: "SKT" },
   { field: "aciklama",  label: "Açıklama" },
-  { field: "musteri",   label: "Müşteri" },
 ];
 
 function fmtMetaDate(iso) {
@@ -62,7 +61,7 @@ export default function ReportPage({
   const [pendingRows, setPendingRows]       = useState([]);
   const [pendingHeaders, setPendingHeaders] = useState([]);
   const [colMapDraft, setColMapDraft]       = useState({});
-  const [extraMappings, setExtraMappings]   = useState([]); // { label, header }[]
+  const [extraSelected, setExtraSelected]   = useState(new Set()); // seçili ekstra header isimleri
   const [uploading, setUploading]           = useState(false);
   const [uploadErr, setUploadErr]           = useState("");
   const [dragOver, setDragOver]             = useState(false);
@@ -187,14 +186,16 @@ export default function ReportPage({
       setPendingHeaders(headers);
       const guessed = guessColMap(headers);
       setColMapDraft(guessed);
-      // Mevcut ekstra kolonları yükle
+      // Önceden seçilmiş ekstra kolonları yükle (aynı dosya tekrar yüklenince hatırlansın)
       if (refColMap) {
-        const prevExtras = Object.entries(refColMap)
-          .filter(([k]) => k.startsWith("_extra_"))
-          .map(([k]) => ({ label: k.slice(7), header: "" }));
-        setExtraMappings(prevExtras);
+        const prev = new Set(
+          Object.keys(refColMap)
+            .filter(k => k.startsWith("_extra_"))
+            .map(k => k.slice(7))
+        );
+        setExtraSelected(prev);
       } else {
-        setExtraMappings([]);
+        setExtraSelected(new Set());
       }
       setShowMapper(true);
     } catch {
@@ -216,12 +217,10 @@ export default function ReportPage({
       setUploadErr("Palet Kodu kolonunu seçmelisiniz.");
       return;
     }
-    // Ekstra kolonları colMap'e ekle
+    // Seçili ekstra kolonları colMap'e ekle (header adı = kolon adı)
     const finalColMap = { ...colMapDraft };
-    for (const em of extraMappings) {
-      if (em.label.trim() && em.header) {
-        finalColMap[`_extra_${em.label.trim()}`] = em.header;
-      }
+    for (const header of extraSelected) {
+      finalColMap[`_extra_${header}`] = header;
     }
     const table = buildTableFromRows(pendingRows, finalColMap);
     onRefTableSave(table, finalColMap);
@@ -229,8 +228,8 @@ export default function ReportPage({
     setUploadErr("");
     setPendingRows([]);
     setPendingHeaders([]);
-    setExtraMappings([]);
-  }, [colMapDraft, extraMappings, pendingRows, onRefTableSave]);
+    setExtraSelected(new Set());
+  }, [colMapDraft, extraSelected, pendingRows, onRefTableSave]);
 
   // ── Filtre yardımcıları ─────────────────────────────────────────────────────
   const getColUniqueVals = useCallback((colId) => {
@@ -519,46 +518,38 @@ export default function ReportPage({
               ))}
             </div>
 
-            {/* Ekstra kolonlar */}
-            <div className="rp-mapper-extras-hd">
-              Ekstra Kolonlar
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={() => setExtraMappings(p => [...p, { label: "", header: "" }])}
-              >
-                + Ekle
-              </button>
-            </div>
-            {extraMappings.length === 0 && (
-              <div className="rp-mapper-extras-empty">
-                Tabloya ekstra kolon eklemek için "+ Ekle" butonuna basın.
-              </div>
-            )}
-            {extraMappings.map((em, i) => (
-              <div key={i} className="rp-mapper-extra-row">
-                <input
-                  className="rp-mapper-extra-name"
-                  placeholder="Kolon adı"
-                  value={em.label}
-                  onChange={e => setExtraMappings(p => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                />
-                <span className="rp-mapper-extra-arrow">→</span>
-                <select
-                  className="rp-mapper-select"
-                  value={em.header}
-                  onChange={e => setExtraMappings(p => p.map((x, j) => j === i ? { ...x, header: e.target.value } : x))}
-                >
-                  <option value="">— Excel kolonu —</option>
-                  {pendingHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                </select>
-                <button
-                  className="rp-mapper-extra-del"
-                  onClick={() => setExtraMappings(p => p.filter((_, j) => j !== i))}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+            {/* Ekstra kolonlar — standart alanlara atanmamış tüm Excel sütunları */}
+            {(() => {
+              const usedHeaders = new Set(Object.values(colMapDraft).filter(Boolean));
+              const freeHeaders = pendingHeaders.filter(h => !usedHeaders.has(h));
+              if (!freeHeaders.length) return null;
+              return (
+                <>
+                  <div className="rp-mapper-extras-hd">
+                    Diğer Excel Sütunları
+                    <span className="rp-mapper-extras-hint">tabloya eklemek istediklerinizi seçin</span>
+                  </div>
+                  <div className="rp-mapper-extras-list">
+                    {freeHeaders.map(h => (
+                      <label key={h} className="rp-mapper-extra-check">
+                        <input
+                          type="checkbox"
+                          checked={extraSelected.has(h)}
+                          onChange={() => {
+                            setExtraSelected(prev => {
+                              const next = new Set(prev);
+                              if (next.has(h)) next.delete(h); else next.add(h);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>{h}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
 
             {uploadErr && <div className="rp-upload-err" style={{ marginTop: 8 }}>{uploadErr}</div>}
             <div className="rp-modal-actions">
