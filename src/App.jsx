@@ -7,6 +7,7 @@ import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
 import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
+import { loadReferenceTable, loadColMap, saveReferenceTable, clearReferenceTable, fetchServerRefTable, pushServerRefTable } from "./services/referenceTable";
 import { toDbPayload, fromDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
 import { useBackButton } from "./hooks/useBackButton";
@@ -47,6 +48,8 @@ export default function App() {
   // Startup sonrası gösterilecek bildirimler
   const [pendingNotification, setPendingNotification] = useState(null); // { msg, color }
   const [adminSyncWarning, setAdminSyncWarning] = useState(false);
+  const [refTable, setRefTable]   = useState({});
+  const [refColMap, setRefColMap] = useState(null);
 
   // Refs for current config values — sunucu push'unda her zaman güncel değeri yakalar
   const fieldsRef       = useRef(fields);
@@ -353,6 +356,26 @@ export default function App() {
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      // Referans tabloyu önce localStorage'dan yükle (hızlı başlangıç)
+      const localTable  = loadReferenceTable();
+      const localColMap = loadColMap();
+      if (Object.keys(localTable).length) {
+        setRefTable(localTable);
+        setRefColMap(localColMap);
+      }
+
+      // PostgreSQL aktifse sunucudan güncel veriyi çek
+      if (finalIntegration?.postgresApi?.active) {
+        try {
+          const { table, colMap } = await fetchServerRefTable(finalIntegration.postgresApi);
+          if (table && Object.keys(table).length) {
+            setRefTable(table);
+            setRefColMap(colMap);
+            saveReferenceTable(table, colMap); // Lokal cache güncelle
+          }
+        } catch { /* Sunucuya ulaşılamadı — lokal data ile devam */ }
+      }
+
       setHydrated(true);
     })();
 
@@ -559,11 +582,55 @@ export default function App() {
     } catch { /* sessiz */ }
   }, []);
 
+  const handleRefTableSave = useCallback(async (table, colMap) => {
+    saveReferenceTable(table, colMap);
+    setRefTable(table);
+    setRefColMap(colMap);
+
+    if (integration.postgresApi?.active) {
+      try {
+        await pushServerRefTable(integration.postgresApi, table, colMap);
+        toast(`${Object.keys(table).length} palet yüklendi ve senkronize edildi`, "var(--ok)");
+      } catch {
+        toast(`${Object.keys(table).length} palet yüklendi (sunucu senkronizasyonu başarısız)`, "var(--acc)");
+      }
+    } else {
+      toast(`${Object.keys(table).length} palet yüklendi`, "var(--ok)");
+    }
+  }, [integration, toast]);
+
+  const handleRefTableClear = useCallback(async () => {
+    clearReferenceTable();
+    setRefTable({});
+    setRefColMap(null);
+
+    if (integration.postgresApi?.active) {
+      try {
+        await pushServerRefTable(integration.postgresApi, {}, null);
+      } catch { /* sessiz */ }
+    }
+    toast("Referans tablo temizlendi", "var(--acc)");
+  }, [integration, toast]);
+
+  const handleSSERefTableUpdate = useCallback(async () => {
+    const int = integrationRef.current;
+    if (!int?.postgresApi?.active) return;
+    try {
+      const { table, colMap } = await fetchServerRefTable(int.postgresApi);
+      if (table && Object.keys(table).length) {
+        setRefTable(table);
+        setRefColMap(colMap);
+        saveReferenceTable(table, colMap);
+      }
+    } catch { /* sessiz */ }
+  }, []);
+
   useServerSync({
     integration,
     onUsersUpdate: handleSSEUsersUpdate,
     onConfigUpdate: handleSSEConfigUpdate,
     onTaramaEvent: handleSSETaramaEvent,
+    onRefTableUpdate: handleSSERefTableUpdate,
   });
 
   const handleSave   = useCallback(r => {
@@ -1079,7 +1146,7 @@ export default function App() {
       <div className="scroll-area" ref={scrollAreaRef}>
         {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={effectiveSettings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
         {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={effectiveSettings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} users={users} integration={integration} onSyncUpdate={handleSyncUpdate} />}
-        {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} />}
+        {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} refTable={refTable} refColMap={refColMap} onRefTableSave={handleRefTableSave} onRefTableClear={handleRefTableClear} />}
         {page === "fields"   && <FieldsPage   fields={fields} setFields={updateFields} isAdmin={isAdmin} settings={effectiveSettings} />}
         {page === "users"    && isAdmin && <UsersPage users={users} setUsers={updateUsers} currentUser={user} toast={toast} />}
         {page === "settings" && <SettingsPage settings={settings} setSettings={updateSettings} userSettings={userSettings} onUpdateUserSettings={updateUserSettings} integration={integration} setIntegration={setIntegration} isAdmin={isAdmin} onClearData={handleClear} onDeleteRange={handleDeleteRange} records={records} toast={toast} user={user} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}

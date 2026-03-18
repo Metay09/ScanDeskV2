@@ -249,6 +249,35 @@ app.put("/api/app-config", requireApiKey, async (req, res) => {
   }
 });
 
+// ── /api/ref-table ───────────────────────────────────────────────────────────
+
+app.get("/api/ref-table", requireApiKey, async (req, res) => {
+  try {
+    const table  = (await getState("ref_table"))  || {};
+    const colMap = (await getState("ref_col_map")) || null;
+    res.json({ table, colMap });
+  } catch (err) {
+    console.error("[ref-table GET]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/ref-table", requireApiKey, async (req, res) => {
+  try {
+    const { table, colMap } = req.body;
+    if (!table || typeof table !== "object") {
+      return res.status(400).json({ error: "table nesnesi bekleniyor" });
+    }
+    await setState("ref_table",  table);
+    await setState("ref_col_map", colMap || {});
+    broadcastSSE("ref_table_updated", { count: Object.keys(table).length });
+    res.json({ ok: true, count: Object.keys(table).length });
+  } catch (err) {
+    console.error("[ref-table PUT]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── React SPA — statik dosyalar ──────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, "../dist")));
 app.get("*", (_req, res) => {
