@@ -171,7 +171,13 @@ export function saveReferenceTable(table, colMap) {
       updatedAt: new Date().toISOString(),
     }));
     return true;
-  } catch { return false; }
+  } catch (err) {
+    if (err?.name === "QuotaExceededError" || err?.code === 22) {
+      return "quota";
+    }
+    console.warn("[saveReferenceTable]", err);
+    return false;
+  }
 }
 
 // ── Yükle ────────────────────────────────────────────────────────────────────
