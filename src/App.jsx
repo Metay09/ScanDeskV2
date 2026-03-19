@@ -76,14 +76,14 @@ export default function App() {
       aciklamaList: aciklamaListRef.current,
       settings:     settingsRef.current,
       ...patch,
-    }).catch(() => {});
+    }).catch(err => console.warn("[syncConfig]", err));
   }, []);
 
   /** Kullanıcı listesini sunucuya iter. */
   const syncUsersToServer = useCallback((updatedUsers) => {
     const int = integrationRef.current;
     if (!int.postgresApi?.active) return;
-    pushServerUsers(int.postgresApi, updatedUsers).catch(() => {});
+    pushServerUsers(int.postgresApi, updatedUsers).catch(err => console.warn("[syncUsers]", err));
   }, []);
 
   // İnternet gelince: sunucudan çek → merge → eksik local kullanıcıları push et
@@ -285,7 +285,7 @@ export default function App() {
             const finalMerged = hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
             setUsers(finalMerged);
             if (localOnly.length > 0) {
-              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(() => {});
+              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(err => console.warn("[syncUsers merge]", err));
             }
 
             // ── Aktif oturum yenileme (Madde 2) ──────────────────────────
@@ -373,7 +373,7 @@ export default function App() {
             setRefColMap(colMap);
             saveReferenceTable(table, colMap); // Lokal cache güncelle
           }
-        } catch { /* Sunucuya ulaşılamadı — lokal data ile devam */ }
+        } catch (err) { console.warn("[fetchRefTable]", err); }
       }
 
       setHydrated(true);
@@ -605,9 +605,14 @@ export default function App() {
   }, []);
 
   const handleRefTableSave = useCallback(async (table, colMap) => {
-    saveReferenceTable(table, colMap);
+    const saved = saveReferenceTable(table, colMap);
     setRefTable(table);
     setRefColMap(colMap);
+
+    if (saved === "quota") {
+      toast("Depolama dolu — tablo tarayıcıya kaydedilemedi", "var(--err)");
+      return;
+    }
 
     if (integration.postgresApi?.active) {
       try {
@@ -642,7 +647,8 @@ export default function App() {
       if (table && Object.keys(table).length) {
         setRefTable(table);
         setRefColMap(colMap);
-        saveReferenceTable(table, colMap);
+        const saved = saveReferenceTable(table, colMap);
+        if (saved === "quota") toast("Depolama dolu — tablo tarayıcıya kaydedilemedi", "var(--err)");
       }
     } catch { /* sessiz */ }
   }, []);
