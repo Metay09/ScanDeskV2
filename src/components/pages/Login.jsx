@@ -14,14 +14,28 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
     if (loading) return;
     setErr("");
 
-    const isAdminUser = u.trim() === "admin";
-    const useServer = !isAdminUser && integration?.postgresApi?.active;
+    const username = u.trim();
 
+    // 1. Önce yerel önbellekte ara (internet gerektirmez)
+    const localFound = users.find(x => x.username === username && x.active !== false);
+    if (localFound) {
+      const ok = await verifyPassword(p, localFound.password);
+      if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
+      if (!localFound.password.startsWith("pbkdf2:")) {
+        const hashed = await hashPassword(p);
+        onMigratePassword?.(localFound.id, hashed);
+      }
+      onLogin(localFound, null);
+      return;
+    }
+
+    // 2. Yerel'de yok — sunucu aktifse sunucudan dene
+    const useServer = username !== "admin" && integration?.postgresApi?.active;
     if (useServer) {
       setLoading(true);
       try {
         const serverUsers = await fetchServerUsers(integration.postgresApi);
-        const found = serverUsers.find(x => x.username === u.trim() && x.active !== false);
+        const found = serverUsers.find(x => x.username === username && x.active !== false);
         if (!found) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
         const ok = await verifyPassword(p, found.password);
         if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
@@ -30,30 +44,14 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
           onMigratePassword?.(found.id, hashed);
         }
         onLogin(found, serverUsers);
-      } catch {
-        // Sunucu erişilemez, yerel önbelleğe dön
-        const found = users.find(x => x.username === u.trim() && x.active !== false);
-        if (!found) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
-        const ok = await verifyPassword(p, found.password);
-        if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
-        if (!found.password.startsWith("pbkdf2:")) {
-          const hashed = await hashPassword(p);
-          onMigratePassword?.(found.id, hashed);
-        }
-        onLogin(found, null);
+      } catch (err) {
+        console.warn("[login:server]", err?.message ?? err);
+        setErr("Sunucuya bağlanılamadı. Kullanıcı adı veya şifre hatalı.");
       } finally {
         setLoading(false);
       }
     } else {
-      const found = users.find(x => x.username === u.trim() && x.active !== false);
-      if (!found) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
-      const ok = await verifyPassword(p, found.password);
-      if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
-      if (!found.password.startsWith("pbkdf2:")) {
-        const hashed = await hashPassword(p);
-        onMigratePassword?.(found.id, hashed);
-      }
-      onLogin(found, null);
+      setErr("Kullanıcı adı veya şifre hatalı.");
     }
   };
 
