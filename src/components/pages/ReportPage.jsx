@@ -25,6 +25,8 @@ const BASE_COLS = [
 
 // Varsayılan gizli kolonlar
 const HIDDEN_BY_DEFAULT = new Set(["skt", "aciklama"]);
+// Veri varsa otomatik gösterilen kolonlar (başlangıçta gizli)
+const SHOW_IF_DATA = new Set(["tarihLT"]);
 
 const MAPPER_FIELDS = [
   { field: "paletKodu", label: "Palet Kodu", required: true },
@@ -68,14 +70,15 @@ export default function ReportPage({
 
   // ── Tablo state ─────────────────────────────────────────────────────────────
   const [visibleCols, setVisibleCols] = useState(
-    () => Object.fromEntries(BASE_COLS.map(c => [c.id, !HIDDEN_BY_DEFAULT.has(c.id)]))
+    () => Object.fromEntries(BASE_COLS.map(c => [c.id, !HIDDEN_BY_DEFAULT.has(c.id) && !SHOW_IF_DATA.has(c.id)]))
   );
   const [colFilters, setColFilters]   = useState({});
   const [openFilter, setOpenFilter]   = useState(null);
   const [showColPicker, setShowColPicker] = useState(false);
 
-  const fileRef    = useRef(null);
-  const filterRefs = useRef({});
+  const fileRef         = useRef(null);
+  const filterRefs      = useRef({});
+  const tarihLTChecked  = useRef(false);
 
   // ── Dinamik ekstra kolonlar (colMap'teki _extra_ alanlarından) ──────────────
   const extraCols = useMemo(() => {
@@ -116,6 +119,14 @@ export default function ReportPage({
       return changed ? next : prev;
     });
   }, [extraCols]);
+
+  // Tarih LT: sadece lot tarihi verisi varsa bir kez aç
+  useEffect(() => {
+    if (tarihLTChecked.current || !baseRecords.length) return;
+    tarihLTChecked.current = true;
+    const hasLT = baseRecords.some(r => r.tarihLT !== undefined && r.tarihLT !== null && r.tarihLT !== "");
+    if (hasLT) setVisibleCols(prev => ({ ...prev, tarihLT: true }));
+  }, [baseRecords]);
 
   // Custom uygulama alanları: veri varsa görünür, yoksa gizli
   useEffect(() => {
