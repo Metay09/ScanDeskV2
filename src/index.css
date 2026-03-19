@@ -270,7 +270,7 @@ label.lbl{display:block;font-size:11px;font-weight:700;color:var(--tx2);
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── REPORT PAGE ── */
-.rp-page{padding-bottom:78px;}
+.rp-page{padding-bottom:78px;max-width:none;}
 .rp-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
 .rp-topbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .rp-topbar-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
@@ -307,7 +307,7 @@ label.lbl{display:block;font-size:11px;font-weight:700;color:var(--tx2);
 .rp-td--total{font-weight:700;}
 
 /* Filter popup */
-.rp-filter-popup{position:absolute;top:100%;left:0;min-width:180px;max-width:260px;
+.rp-filter-popup{position:fixed;min-width:180px;max-width:260px;
   background:var(--s2);border:1.5px solid var(--brd2);border-radius:var(--r);
   box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:100;padding:8px;}
 .rp-filter-actions{display:flex;gap:6px;margin-bottom:8px;}

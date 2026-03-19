@@ -74,6 +74,7 @@ export default function ReportPage({
   );
   const [colFilters, setColFilters]   = useState({});
   const [openFilter, setOpenFilter]   = useState(null);
+  const [filterPopupPos, setFilterPopupPos] = useState(null);
   const [showColPicker, setShowColPicker] = useState(false);
 
   const fileRef         = useRef(null);
@@ -162,6 +163,15 @@ export default function ReportPage({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openFilter, showColPicker]);
+
+  // Sayfa kaydırıldığında filtre popup'ı kapat (position:fixed popup kayar)
+  useEffect(() => {
+    if (!openFilter) return;
+    const el = document.querySelector(".scroll-area");
+    const close = () => setOpenFilter(null);
+    el?.addEventListener("scroll", close, { passive: true });
+    return () => el?.removeEventListener("scroll", close);
+  }, [openFilter]);
 
   // ── Referans tabloyla birleştir ─────────────────────────────────────────────
   const tableRows = useMemo(() => {
@@ -461,7 +471,16 @@ export default function ReportPage({
                           className="rp-th-btn"
                           onClick={e => {
                             e.stopPropagation();
-                            setOpenFilter(p => p === col.id ? null : col.id);
+                            const next = openFilter === col.id ? null : col.id;
+                            setOpenFilter(next);
+                            if (next) {
+                              const th = filterRefs.current[col.id];
+                              if (th) {
+                                const rect = th.getBoundingClientRect();
+                                const left = Math.min(rect.left, window.innerWidth - 270);
+                                setFilterPopupPos({ top: rect.bottom + 4, left });
+                              }
+                            }
                           }}
                         >
                           {col.label}
@@ -469,7 +488,11 @@ export default function ReportPage({
                         </button>
 
                         {openFilter === col.id && (
-                          <div className="rp-filter-popup" onClick={e => e.stopPropagation()}>
+                          <div
+                            className="rp-filter-popup"
+                            style={filterPopupPos ? { top: filterPopupPos.top, left: filterPopupPos.left } : undefined}
+                            onClick={e => e.stopPropagation()}
+                          >
                             <div className="rp-filter-actions">
                               <button className="btn btn-sm btn-ghost" onClick={() => selectAllFilter(col.id)}>Tümü</button>
                               <button className="btn btn-sm btn-ghost" onClick={() => clearColFilter(col.id)}>Temizle</button>
