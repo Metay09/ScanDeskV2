@@ -31,7 +31,16 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         }
         onLogin(found, serverUsers);
       } catch {
-        setErr("Giriş için internet bağlantısı gerekli.");
+        // Sunucu erişilemez, yerel önbelleğe dön
+        const found = users.find(x => x.username === u.trim() && x.active !== false);
+        if (!found) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
+        const ok = await verifyPassword(p, found.password);
+        if (!ok) { setErr("Kullanıcı adı veya şifre hatalı."); return; }
+        if (!found.password.startsWith("pbkdf2:")) {
+          const hashed = await hashPassword(p);
+          onMigratePassword?.(found.id, hashed);
+        }
+        onLogin(found, null);
       } finally {
         setLoading(false);
       }
