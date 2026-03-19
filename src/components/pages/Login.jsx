@@ -46,7 +46,8 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         onLogin(found, serverUsers);
       } catch (err) {
         console.warn("[login:server]", err?.message ?? err);
-        setErr("Sunucuya bağlanılamadı. Kullanıcı adı veya şifre hatalı.");
+        const url = integration?.postgresApi?.serverUrl || "";
+        setErr(`Sunucuya bağlanılamadı${url ? ` (${url})` : ""}. Ağ bağlantısı ve sunucu ayarlarını kontrol edin.`);
       } finally {
         setLoading(false);
       }
@@ -92,7 +93,7 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         </button>
         {integration?.postgresApi?.active && (
           <p style={{ marginTop: 14, fontSize: 11, color: "var(--tx2)", textAlign: "center", lineHeight: 1.5 }}>
-            Admin dışındaki kullanıcılar için internet bağlantısı gereklidir.
+            {`Sunucu: ${integration.postgresApi.serverUrl} — admin dışı kullanıcılar sunucu bağlantısı gerektirir.`}
           </p>
         )}
       </div>

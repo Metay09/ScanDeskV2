@@ -350,6 +350,14 @@ export default function App() {
             const appRecords = serverRecords.value.map(r => fromDbPayload(r));
             setRecords(normalizeLoadedRecords(appRecords, loadedFields));
           }
+
+          // Tüm sunucu istekleri başarısız olduysa kullanıcıya bildir
+          if (serverUsers.status === "rejected" && serverConfig.status === "rejected") {
+            setPendingNotification({
+              msg: "Sunucuya bağlanılamadı — yerel veriler kullanılıyor.",
+              color: "var(--acc)",
+            });
+          }
         } catch {
           // Sunucuya ulaşılamadı — local data ile devam
         }
