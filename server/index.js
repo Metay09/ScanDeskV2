@@ -48,7 +48,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // API key hem header'dan hem URL query param'dan kabul edilir
 // (SSE bağlantısında tarayıcı custom header gönderemez, key=... ile URL'ye eklenir)
