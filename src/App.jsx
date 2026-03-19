@@ -561,6 +561,28 @@ export default function App() {
     } catch { /* sessiz */ }
   }, []);
 
+  // Sunucudan tüm kayıtları çekip yerel state'e eksik olanları ekler.
+  // SSE yeniden bağlanınca ve polling fallback'te çağrılır.
+  const handleRecordsSync = useCallback(async () => {
+    const int = integrationRef.current;
+    if (!int?.postgresApi?.active) return;
+    try {
+      const serverRecs = await fetchServerRecords(int.postgresApi);
+      if (!Array.isArray(serverRecs)) return;
+      setRecords(prev => {
+        const existingIds = new Set(prev.map(r => r.id));
+        const newRecs = serverRecs
+          .filter(r => !existingIds.has(r.id))
+          .map(r => {
+            const n = normalizeRecord(fromDbPayload(r), fieldsRef.current);
+            const sd = deriveShiftDate(n);
+            return sd ? { ...n, shiftDate: sd } : n;
+          });
+        return newRecs.length ? [...newRecs, ...prev] : prev;
+      });
+    } catch { /* sessiz */ }
+  }, []);
+
   const handleSSETaramaEvent = useCallback(async (type, { id }) => {
     const int = integrationRef.current;
     if (!int?.postgresApi?.active) return;
@@ -631,6 +653,7 @@ export default function App() {
     onConfigUpdate: handleSSEConfigUpdate,
     onTaramaEvent: handleSSETaramaEvent,
     onRefTableUpdate: handleSSERefTableUpdate,
+    onRecordsSync: handleRecordsSync,
   });
 
   const handleSave   = useCallback(r => {

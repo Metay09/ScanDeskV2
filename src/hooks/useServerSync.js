@@ -16,7 +16,7 @@ import { useEffect, useRef, useCallback } from "react";
  * @param {function} onConfigUpdate - sunucudan güncel config'i çek
  * @param {function} [onTaramaEvent] - (type: "added"|"updated"|"deleted", data: {id}) => void
  */
-export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTaramaEvent, onRefTableUpdate }) {
+export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTaramaEvent, onRefTableUpdate, onRecordsSync }) {
   const esRef         = useRef(null);
   const pollingRef    = useRef(null);
   const reconnectRef  = useRef(null);
@@ -24,14 +24,16 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
   const activeRef     = useRef(false);
 
   // Callback'leri ref'te tut — bağlantı kapatılmadan güncel değere erişilsin
-  const onUsersUpdateRef   = useRef(onUsersUpdate);
-  const onConfigUpdateRef  = useRef(onConfigUpdate);
-  const onTaramaEventRef   = useRef(onTaramaEvent);
+  const onUsersUpdateRef    = useRef(onUsersUpdate);
+  const onConfigUpdateRef   = useRef(onConfigUpdate);
+  const onTaramaEventRef    = useRef(onTaramaEvent);
   const onRefTableUpdateRef = useRef(onRefTableUpdate);
-  useEffect(() => { onUsersUpdateRef.current  = onUsersUpdate;  }, [onUsersUpdate]);
-  useEffect(() => { onConfigUpdateRef.current = onConfigUpdate; }, [onConfigUpdate]);
-  useEffect(() => { onTaramaEventRef.current  = onTaramaEvent;  }, [onTaramaEvent]);
+  const onRecordsSyncRef    = useRef(onRecordsSync);
+  useEffect(() => { onUsersUpdateRef.current    = onUsersUpdate;    }, [onUsersUpdate]);
+  useEffect(() => { onConfigUpdateRef.current   = onConfigUpdate;   }, [onConfigUpdate]);
+  useEffect(() => { onTaramaEventRef.current    = onTaramaEvent;    }, [onTaramaEvent]);
   useEffect(() => { onRefTableUpdateRef.current = onRefTableUpdate; }, [onRefTableUpdate]);
+  useEffect(() => { onRecordsSyncRef.current    = onRecordsSync;    }, [onRecordsSync]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -44,8 +46,9 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
     if (pollingRef.current) return;
     pollingRef.current = setInterval(async () => {
       if (sseWorkingRef.current) { stopPolling(); return; }
-      try { await onUsersUpdateRef.current?.(); } catch { /* sessiz */ }
+      try { await onUsersUpdateRef.current?.(); }  catch { /* sessiz */ }
       try { await onConfigUpdateRef.current?.(); } catch { /* sessiz */ }
+      try { await onRecordsSyncRef.current?.(); }  catch { /* sessiz */ }
     }, 30000);
   }, [stopPolling]);
 
@@ -69,6 +72,8 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
     es.addEventListener("connected", () => {
       sseWorkingRef.current = true;
       stopPolling();
+      // Yeniden bağlanınca kaçırılan kayıtları telafi et
+      onRecordsSyncRef.current?.().catch(() => {});
     });
 
     es.addEventListener("users_updated", () => {
