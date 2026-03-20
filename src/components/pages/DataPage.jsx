@@ -110,47 +110,45 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
           }
         };
 
+        // İçe aktarmada sistem alanları yeni okutma gibi doldurulur.
+        // Excel'den yalnızca barkod, müşteri, açıklama ve dinamik alanlar alınır.
+        const IMPORT_SKIP_FIELDS = new Set([
+          "date", "time", "timestamp", "shift", "shiftDate",
+          "scanned_by", "scanned_by_username",
+          "syncStatus", "syncError", "source", "sourceRecordId", "updatedAt",
+          "id",
+        ]);
+        const now = new Date();
         const imported = rows.map(row => {
           const rec = { id: genId(), customFields: {} };
-          let importDate = "", importTime = "";
           Object.entries(row).forEach(([col, val]) => {
             const fid = labelMap[col.toLowerCase().trim()];
-            // date/time are not stored in records but needed to build timestamp
-            if (fid === "date") { importDate = String(val ?? ""); return; }
-            if (fid === "time") { importTime = String(val ?? ""); return; }
-            if (fid && FIXED_FIELDS.includes(fid)) {
-              // It's a fixed field - put it at root level
+            // Sistem alanlarını atla — bunlar aşağıda yeni okutma gibi doldurulur
+            if (!fid || IMPORT_SKIP_FIELDS.has(fid)) return;
+            if (fid === "barcode" || fid === "customer" || fid === "aciklama") {
+              // Barkod, müşteri ve açıklama doğrudan root'a
               rec[fid] = String(val ?? "");
-            } else if (fid) {
-              // It's a dynamic field - put it in customFields with type parsing
-              rec.customFields[fid] = parseFieldValue(val, fid);
+            } else if (FIXED_FIELDS.includes(fid)) {
+              rec[fid] = String(val ?? "");
             } else {
-              // Unknown column - treat as dynamic field to preserve data
-              const cleanCol = col.trim();
-              if (cleanCol) {
-                rec.customFields[cleanCol] = String(val ?? "");
-              }
+              // Dinamik alan → customFields
+              rec.customFields[fid] = parseFieldValue(val, fid);
             }
           });
 
           if (!rec.barcode) return null;
 
-          // Build timestamp from date+time columns if available, or use imported timestamp
-          if (!rec.timestamp) {
-            if (importDate && importTime) {
-              const parsed = new Date(`${importDate}T${importTime}`);
-              rec.timestamp = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
-            } else {
-              rec.timestamp = new Date().toISOString();
-            }
-          }
-
-          // Set other required fields with defaults (preserve if imported)
-          if (!rec.syncStatus) rec.syncStatus = "pending";
-          if (!rec.syncError) rec.syncError = "";
-          if (!rec.source) rec.source = "import";
-          if (!rec.sourceRecordId) rec.sourceRecordId = "";
-          if (!rec.updatedAt) rec.updatedAt = rec.timestamp;
+          // Sistem alanlarını yeni okutma gibi doldur
+          rec.timestamp = now.toISOString();
+          rec.shift = currentShift;
+          rec.shiftDate = currentShiftDate;
+          rec.scanned_by = user?.name ?? "";
+          rec.scanned_by_username = user?.username ?? "";
+          rec.syncStatus = "pending";
+          rec.syncError = "";
+          rec.source = "import";
+          rec.sourceRecordId = "";
+          rec.updatedAt = now.toISOString();
 
           return rec;
         }).filter(Boolean);
