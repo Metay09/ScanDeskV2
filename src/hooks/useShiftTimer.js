@@ -59,9 +59,11 @@ export function useShiftTimer(user, isAdmin, userLoginShift, onLogoutRef) {
   useEffect(() => {
     if (graceEndTime === null || !user) return;
 
+    let id;
     const update = () => {
       const secsLeft = Math.max(0, Math.floor((graceEndTime - Date.now()) / 1000));
       if (secsLeft === 0) {
+        clearInterval(id);
         onLogoutRef.current?.("shift_expired");
       } else {
         setGraceSecsLeft(secsLeft);
@@ -69,7 +71,7 @@ export function useShiftTimer(user, isAdmin, userLoginShift, onLogoutRef) {
     };
 
     update();
-    const id = setInterval(update, 1000);
+    id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, [graceEndTime, user, onLogoutRef]);
 

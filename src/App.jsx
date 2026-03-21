@@ -226,7 +226,7 @@ export default function App() {
 
       // Restore active session if it exists and is still valid
       if (st?.activeSession) {
-        const { username, loginShift } = st.activeSession;
+        const { username, loginShift, loginAt } = st.activeSession;
         const foundUser = loadedUsers.find(u => u.username === username);
 
         if (foundUser) {
@@ -243,6 +243,13 @@ export default function App() {
                 const now = Date.now();
                 sessionValid = now < graceEnd;
                 if (sessionValid) restoredGraceEndTime = graceEnd;
+              }
+            } else if (loginAt) {
+              // Aynı vardiya etiketi ama farklı gün ise oturumu geçersiz say
+              const loginShiftDate = getShiftDate(loginAt, loginShift);
+              const currentShiftDate = getShiftDate(undefined, currentShift);
+              if (loginShiftDate !== currentShiftDate) {
+                sessionValid = false;
               }
             }
           }
