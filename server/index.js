@@ -149,7 +149,7 @@ app.patch("/api/taramalar/:id", requireApiKey, async (req, res) => {
         r.barcode, r.shift, r.shift_date || null,
         r.customer || "", r.aciklama || "",
         r.scanned_by, r.scanned_by_username,
-        r.sync_status || "synced", r.sync_error || "",
+        "synced", r.sync_error || "",
         r.source || "scan", r.source_record_id || "",
         r.updated_at || new Date(),
         JSON.stringify(r.custom_fields || {}),
