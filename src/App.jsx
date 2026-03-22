@@ -589,13 +589,14 @@ export default function App() {
         const existingIds = new Set(prev.map(r => r.id));
         const serverMap = new Map(serverRecs.map(r => [r.id, r]));
 
-        // Mevcut kayıtları sunucu verisiyle güncelle (syncStatus: "synced" dahil)
+        // Mevcut kayıtları sunucu verisiyle güncelle — server'da olan kayıt = synced
         const updated = prev.map(r => {
           const s = serverMap.get(r.id);
           if (!s) return r;
           const n = normalizeRecord(fromDbPayload(s), fieldsRef.current);
           const sd = deriveShiftDate(n);
-          return sd ? { ...n, shiftDate: sd } : n;
+          const rec = sd ? { ...n, shiftDate: sd } : n;
+          return { ...rec, syncStatus: "synced" };
         });
 
         // Sunucuda olup lokal'de olmayan yeni kayıtları ekle
@@ -604,7 +605,8 @@ export default function App() {
           .map(r => {
             const n = normalizeRecord(fromDbPayload(r), fieldsRef.current);
             const sd = deriveShiftDate(n);
-            return sd ? { ...n, shiftDate: sd } : n;
+            const rec = sd ? { ...n, shiftDate: sd } : n;
+            return { ...rec, syncStatus: "synced" };
           });
 
         if (!newRecs.length && updated.every((r, i) => r === prev[i])) return prev;
@@ -621,11 +623,11 @@ export default function App() {
         setRecords(prev => prev.filter(r => r.id !== id));
         return;
       }
-      // added veya updated: sunucudan tek kaydı çek
+      // added veya updated: sunucudan tek kaydı çek — server'da olan = synced
       const dbRow = await fetchServerRecord(int.postgresApi, id);
       const normalized = normalizeRecord(fromDbPayload(dbRow), fieldsRef.current);
       const sd = deriveShiftDate(normalized);
-      const rec = sd ? { ...normalized, shiftDate: sd } : normalized;
+      const rec = { ...(sd ? { ...normalized, shiftDate: sd } : normalized), syncStatus: "synced" };
       if (type === "added") {
         setRecords(prev => prev.some(r => r.id === id)
           ? prev.map(r => r.id === id ? rec : r)
