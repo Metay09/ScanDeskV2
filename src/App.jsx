@@ -576,8 +576,9 @@ export default function App() {
     } catch { /* sessiz */ }
   }, []);
 
-  // Sunucudan tüm kayıtları çekip yerel state'e eksik olanları ekler.
-  // SSE yeniden bağlanınca ve polling fallback'te çağrılır.
+  // Sunucudan tüm kayıtları çekip yerel state'e eksik olanları ekler ve
+  // mevcut kayıtların syncStatus dahil sunucu verileriyle günceller.
+  // SSE yeniden bağlanınca ve periyodik polling'de çağrılır.
   const handleRecordsSync = useCallback(async () => {
     const int = integrationRef.current;
     if (!int?.postgresApi?.active) return;
@@ -586,6 +587,18 @@ export default function App() {
       if (!Array.isArray(serverRecs)) return;
       setRecords(prev => {
         const existingIds = new Set(prev.map(r => r.id));
+        const serverMap = new Map(serverRecs.map(r => [r.id, r]));
+
+        // Mevcut kayıtları sunucu verisiyle güncelle (syncStatus: "synced" dahil)
+        const updated = prev.map(r => {
+          const s = serverMap.get(r.id);
+          if (!s) return r;
+          const n = normalizeRecord(fromDbPayload(s), fieldsRef.current);
+          const sd = deriveShiftDate(n);
+          return sd ? { ...n, shiftDate: sd } : n;
+        });
+
+        // Sunucuda olup lokal'de olmayan yeni kayıtları ekle
         const newRecs = serverRecs
           .filter(r => !existingIds.has(r.id))
           .map(r => {
@@ -593,7 +606,9 @@ export default function App() {
             const sd = deriveShiftDate(n);
             return sd ? { ...n, shiftDate: sd } : n;
           });
-        return newRecs.length ? [...newRecs, ...prev] : prev;
+
+        if (!newRecs.length && updated.every((r, i) => r === prev[i])) return prev;
+        return newRecs.length ? [...newRecs, ...updated] : updated;
       });
     } catch { /* sessiz */ }
   }, []);
@@ -612,7 +627,9 @@ export default function App() {
       const sd = deriveShiftDate(normalized);
       const rec = sd ? { ...normalized, shiftDate: sd } : normalized;
       if (type === "added") {
-        setRecords(prev => prev.some(r => r.id === id) ? prev : [rec, ...prev]);
+        setRecords(prev => prev.some(r => r.id === id)
+          ? prev.map(r => r.id === id ? rec : r)
+          : [rec, ...prev]);
       } else {
         setRecords(prev => prev.map(r => r.id === id ? rec : r));
       }
