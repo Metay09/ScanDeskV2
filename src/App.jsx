@@ -612,7 +612,9 @@ export default function App() {
       const sd = deriveShiftDate(normalized);
       const rec = sd ? { ...normalized, shiftDate: sd } : normalized;
       if (type === "added") {
-        setRecords(prev => prev.some(r => r.id === id) ? prev : [rec, ...prev]);
+        setRecords(prev => prev.some(r => r.id === id)
+          ? prev.map(r => r.id === id ? rec : r)
+          : [rec, ...prev]);
       } else {
         setRecords(prev => prev.map(r => r.id === id ? rec : r));
       }
