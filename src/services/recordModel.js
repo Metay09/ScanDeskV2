@@ -184,6 +184,9 @@ export function fromDbPayload(dbRecord) {
       // Normalize to YYYY-MM-DD: DB may return TIMESTAMP ("2024-01-16T00:00:00.000Z")
       // or DATE ("2024-01-16") depending on column type — always take the date part only
       record['shiftDate'] = value ? String(value).slice(0, 10) : null;
+    } else if (dbField === 'sync_status') {
+      // DB'den gelen kayıt sunucuda var demektir → null/undefined ise "synced" varsayılan
+      record.syncStatus = value || 'synced';
     } else {
       // Use mapping if available, otherwise keep as-is
       const appField = DB_TO_FIELD_MAPPING[dbField] || dbField;
