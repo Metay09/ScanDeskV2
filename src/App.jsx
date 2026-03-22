@@ -4,7 +4,7 @@ import { Share } from "@capacitor/share";
 import "./index.css";
 import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_GSHEETS_ACTIVE, DEFAULT_USER_SETTINGS, DEFAULT_POSTGRES_ACTIVE } from "./constants";
 import { isNative, loadState, saveState } from "./services/storage";
-import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime } from "./utils";
+import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime, fmtDate } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
 import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
 import { loadReferenceTable, loadColMap, saveReferenceTable, clearReferenceTable, fetchServerRefTable, pushServerRefTable } from "./services/referenceTable";
@@ -432,7 +432,10 @@ export default function App() {
   useEffect(() => { syncBackButtonRefs(page, showExitConfirm); }, [page, showExitConfirm]);
 
   const visibleRecordsCount = useMemo(() => {
-    if (isAdmin) return records.length;
+    if (isAdmin) {
+      const today = fmtDate();
+      return records.filter(r => deriveShiftDate(r) === today).length;
+    }
     const currentShift = userLoginShift || getCurrentShift();
     const currentShiftDate = getShiftDate(undefined, currentShift);
     return records.filter(r =>
