@@ -45,12 +45,16 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
   const startPolling = useCallback(() => {
     if (pollingRef.current) return;
     pollingRef.current = setInterval(async () => {
-      if (sseWorkingRef.current) { stopPolling(); return; }
-      try { await onUsersUpdateRef.current?.(); }  catch { /* sessiz */ }
-      try { await onConfigUpdateRef.current?.(); } catch { /* sessiz */ }
+      if (!sseWorkingRef.current) {
+        // SSE çalışmıyor — kullanıcı ve config de senkronize et
+        try { await onUsersUpdateRef.current?.(); }  catch { /* sessiz */ }
+        try { await onConfigUpdateRef.current?.(); } catch { /* sessiz */ }
+      }
+      // SSE aktif olsa da kayıt senkronizasyonunu her zaman yap
+      // (SSE eventi gözden kaçırılmış olabilir; syncStatus güncellemelerini de yakalar)
       try { await onRecordsSyncRef.current?.(); }  catch { /* sessiz */ }
     }, 30000);
-  }, [stopPolling]);
+  }, []);
 
   const connect = useCallback(() => {
     if (!activeRef.current) return;
@@ -68,10 +72,10 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
     catch { startPolling(); return; }
 
     esRef.current = es;
+    startPolling(); // SSE aktif olsa da 30s'de bir kayıt sync yapılsın
 
     es.addEventListener("connected", () => {
       sseWorkingRef.current = true;
-      stopPolling();
       // Yeniden bağlanınca kaçırılan kayıtları telafi et
       onRecordsSyncRef.current?.().catch(() => {});
     });
@@ -117,7 +121,7 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
         }, 3000);
       }
     };
-  }, [integration, startPolling, stopPolling]);
+  }, [integration, startPolling]);
 
   useEffect(() => {
     if (!integration?.postgresApi?.active) return;
