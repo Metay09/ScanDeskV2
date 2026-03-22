@@ -7,6 +7,7 @@ import {
 } from "../../services/referenceTable";
 import { isNative } from "../../services/storage";
 import { getDynamicFieldValue } from "../../services/recordModel";
+import { fmtDate, deriveShiftDate, FIXED_SHIFTS } from "../../utils";
 
 // ── Temel sabit kolonlar ──────────────────────────────────────────────────────
 const BASE_COLS = [
@@ -57,6 +58,7 @@ export default function ReportPage({
   onRefTableSave,
   onRefTableClear,
   toast,
+  users,
 }) {
   // ── Upload / Mapper state ───────────────────────────────────────────────────
   const [showMapper, setShowMapper]         = useState(false);
@@ -74,6 +76,13 @@ export default function ReportPage({
   );
   const [colFilters, setColFilters]   = useState({});
   const [openFilter, setOpenFilter]   = useState(null);
+
+  // ── Admin record filtreleri ──────────────────────────────────────────────────
+  const [selectedDate,  setSelectedDate]  = useState(() => fmtDate());
+  const [selectedShift, setSelectedShift] = useState(null);
+  const [selectedUser,  setSelectedUser]  = useState(null);
+  const [shiftOpen,     setShiftOpen]     = useState(false);
+  const [userOpen,      setUserOpen]      = useState(false);
   const [filterPopupPos, setFilterPopupPos] = useState(null);
   const [showColPicker, setShowColPicker] = useState(false);
 
@@ -104,9 +113,16 @@ export default function ReportPage({
 
   // ── Admin / non-admin filtresi — useEffect'lerden ÖNCE tanımlanmalı ─────────
   const baseRecords = useMemo(() => {
-    if (isAdmin) return records;
+    if (isAdmin) {
+      return records.filter(r => {
+        if (selectedDate  && deriveShiftDate(r) !== selectedDate)   return false;
+        if (selectedShift && r.shift !== selectedShift)              return false;
+        if (selectedUser  && r.scanned_by_username !== selectedUser) return false;
+        return true;
+      });
+    }
     return records.filter(r => r.shift === currentShift);
-  }, [records, isAdmin, currentShift]);
+  }, [records, isAdmin, currentShift, selectedDate, selectedShift, selectedUser]);
 
   // Ekstra Excel kolonları değişince visibleCols'a ekle (varsayılan: görünür)
   useEffect(() => {
@@ -405,6 +421,67 @@ export default function ReportPage({
           )}
         </div>
         <div className="rp-topbar-right">
+          {isAdmin && (
+            <>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={e => setSelectedDate(e.target.value)}
+                className="shift-date"
+              />
+              <div style={{ position: "relative" }}>
+                <button
+                  className={`btn btn-sm ${selectedShift ? "btn-info" : "btn-ghost"}`}
+                  onClick={() => { setShiftOpen(p => !p); setUserOpen(false); }}>
+                  {selectedShift || "Vardiya"}
+                </button>
+                {shiftOpen && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0,
+                    background: "var(--bg2)", border: "1px solid var(--brd)", borderRadius: 8,
+                    zIndex: 99, minWidth: 120 }}>
+                    {[null, ...FIXED_SHIFTS.map(s => s.label)].map(v => (
+                      <div key={v ?? "__all"}
+                        onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
+                        style={{ padding: "10px 14px", cursor: "pointer",
+                          fontWeight: v === selectedShift ? 700 : 400,
+                          color: v === selectedShift ? "var(--inf)" : "var(--tx1)",
+                          fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                        {v ?? "Tümü"}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ position: "relative" }}>
+                <button
+                  className={`btn btn-sm ${selectedUser ? "btn-info" : "btn-ghost"}`}
+                  onClick={() => { setUserOpen(p => !p); setShiftOpen(false); }}>
+                  {selectedUser
+                    ? (users?.find(u => u.username === selectedUser)?.name || selectedUser)
+                    : "Kullanıcı"}
+                </button>
+                {userOpen && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0,
+                    background: "var(--bg2)", border: "1px solid var(--brd)", borderRadius: 8,
+                    zIndex: 99, minWidth: 140 }}>
+                    {[null, ...(users ?? []).filter(u => u.active !== false)].map(v => {
+                      const uname = v?.username ?? null;
+                      return (
+                        <div key={uname ?? "__all"}
+                          onClick={() => { setSelectedUser(uname); setUserOpen(false); }}
+                          style={{ padding: "10px 14px", cursor: "pointer",
+                            fontWeight: uname === selectedUser ? 700 : 400,
+                            color: uname === selectedUser ? "var(--inf)" : "var(--tx1)",
+                            fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                          {v ? (v.name || v.username) : "Tümü"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           {anyFilter && (
             <button className="btn btn-sm" style={{ color: "var(--acc)" }} onClick={() => setColFilters({})}>
               Filtreyi Temizle
