@@ -355,7 +355,7 @@ export default function App() {
 
           if (serverRecords.status === "fulfilled" && Array.isArray(serverRecords.value)) {
             const appRecords = serverRecords.value.map(r => fromDbPayload(r));
-            setRecords(normalizeLoadedRecords(appRecords, loadedFields));
+            setRecords(normalizeLoadedRecords(appRecords, loadedFields).map(r => ({ ...r, syncStatus: "synced" })));
           }
 
           // Tüm sunucu istekleri başarısız olduysa kullanıcıya bildir
@@ -500,7 +500,7 @@ export default function App() {
             return appRecords.map(r => {
               const n = normalizeRecord(r, fieldsRef.current);
               const sd = deriveShiftDate(n);
-              return sd ? { ...n, shiftDate: sd } : n;
+              return { ...(sd ? { ...n, shiftDate: sd } : n), syncStatus: "synced" };
             });
           });
         }
