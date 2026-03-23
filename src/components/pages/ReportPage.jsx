@@ -269,7 +269,8 @@ export default function ReportPage({
         setExtraSelected(new Set());
       }
       setShowMapper(true);
-    } catch {
+    } catch (err) {
+      console.error("Excel parse error:", err);
       setUploadErr("Dosya okunurken hata oluştu.");
     } finally {
       setUploading(false);
@@ -527,7 +528,7 @@ export default function ReportPage({
       </div>
 
       {/* ── Tablo yoksa büyük yükleme alanı ── */}
-      {!hasTable && <UploadZone />}
+      {!hasTable && UploadZone({})}
 
       {/* ── Tablo varsa ── */}
       {hasTable && (
@@ -630,7 +631,7 @@ export default function ReportPage({
             </table>
           </div>
 
-          <UploadZone compact />
+          {UploadZone({ compact: true })}
         </>
       )}
 
