@@ -192,7 +192,7 @@ export default function ShiftInheritModal({ currentShift, currentUser, records, 
           className="btn btn-ok"
           style={{ flex: 1 }}
           disabled={selected.size === 0}
-          onClick={() => onCopy(sourceShift, sourceUser.username, [...selected])}
+          onClick={() => onCopy(sourceShift, sourceUser.username, [...selected], sourceDate)}
         >
           <Ic d={I.save} s={15} /> Devral ({selected.size})
         </button>
