@@ -169,7 +169,7 @@ export default function App() {
         setLastSaved(addShiftDate(normalized));
       }
 
-      if (Array.isArray(st?.custList) && st.custList.length) {
+      if (Array.isArray(st?.custList)) {
         setCustList(st.custList);
       }
 
@@ -346,7 +346,7 @@ export default function App() {
                 ?.find(u => u.username === activeName)
               ?? loadedUsers.find(u => u.username === activeName);
             if (activeUser) {
-              if (Array.isArray(activeUser.custList) && activeUser.custList.length)
+              if (Array.isArray(activeUser.custList))
                 setCustList(activeUser.custList);
               if (Array.isArray(activeUser.aciklamaList))
                 setAciklamaList(activeUser.aciklamaList);
@@ -477,7 +477,7 @@ export default function App() {
 
     // Kişisel ayarları ve listeleri kullanıcı objesinden yükle
     setUserSettings(u.userSettings || {});
-    setCustList(Array.isArray(u.custList) && u.custList.length ? u.custList : DEFAULT_CUSTS);
+    setCustList(Array.isArray(u.custList) ? u.custList : DEFAULT_CUSTS);
     setAciklamaList(Array.isArray(u.aciklamaList) ? u.aciklamaList : DEFAULT_ACIKLAMAS);
 
     // Login sayfasından serverUsers geldiyse kullanıcı listesini güncelle
@@ -1058,6 +1058,7 @@ export default function App() {
       const next = custList.filter(c => c !== name);
       setCustList(next);
       syncUserLists(next, undefined);
+      syncConfigToServer({ custList: next });
     },
   };
 
@@ -1074,6 +1075,7 @@ export default function App() {
       const next = aciklamaList.filter(a => a !== name);
       setAciklamaList(next);
       syncUserLists(undefined, next);
+      syncConfigToServer({ aciklamaList: next });
     },
   };
 
