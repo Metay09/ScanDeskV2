@@ -47,7 +47,7 @@ export function normalizeDate(val) {
   const pad = n => String(n).padStart(2, "0");
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return "";
-    return `${pad(val.getUTCDate())}.${pad(val.getUTCMonth() + 1)}.${val.getUTCFullYear()}`;
+    return `${pad(val.getDate())}.${pad(val.getMonth() + 1)}.${val.getFullYear()}`;
   }
   const s = String(val).trim();
   if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
