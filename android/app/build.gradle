@@ -22,6 +22,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def buildType = variant.buildType.name
+            if (buildType == "release") {
+                outputFileName = "ScanDesk-${variant.versionName}.apk"
+            } else {
+                outputFileName = "ScanDesk-${buildType}.apk"
+            }
+        }
+    }
 }
 
 repositories {
