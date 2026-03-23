@@ -343,7 +343,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     else doSaveCode(barcode, extras);
   }, [pendingBc, barcode, extras, doSaveCode]);
 
-  const copyFromShift = useCallback((sourceShift, sourceUsername, selectedIds) => {
+  const copyFromShift = useCallback((sourceShift, sourceUsername, selectedIds, sourceDate) => {
     const targetShift = isAdmin ? adminShift : getCurrentShift();
     const todayStr = getShiftDate(undefined, targetShift);
     const selectedSet = new Set(selectedIds);
@@ -363,7 +363,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
 
     const toCopy = (records || []).filter(r =>
       r.shift === sourceShift &&
-      deriveShiftDate(r) === todayStr &&
+      deriveShiftDate(r) === sourceDate &&
       r.scanned_by_username === sourceUsername &&
       selectedSet.has(r.id) &&
       !alreadyTakenSourceIds.has(r.id) // Prevent duplicate takeover

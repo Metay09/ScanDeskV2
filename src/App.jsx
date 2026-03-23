@@ -498,13 +498,26 @@ export default function App() {
       try {
         const serverRecs = await fetchServerRecords(int.postgresApi);
         if (Array.isArray(serverRecs)) {
-          const appRecords = serverRecs.map(r => fromDbPayload(r));
-          setRecords(() => {
-            return appRecords.map(r => {
-              const n = normalizeRecord(r, fieldsRef.current);
+          setRecords(prev => {
+            const serverMap = new Map(serverRecs.map(r => [r.id, r]));
+            const existingIds = new Set(prev.map(r => r.id));
+            // Mevcut kayıtları güncelle; sunucuda olmayanları (pending) koru
+            const updated = prev.map(r => {
+              const s = serverMap.get(r.id);
+              if (!s) return r;
+              const n = normalizeRecord(fromDbPayload(s), fieldsRef.current);
               const sd = deriveShiftDate(n);
               return { ...(sd ? { ...n, shiftDate: sd } : n), syncStatus: "synced" };
             });
+            // Sunucuda olup lokalde olmayan yeni kayıtları ekle
+            const newRecs = serverRecs
+              .filter(r => !existingIds.has(r.id))
+              .map(r => {
+                const n = normalizeRecord(fromDbPayload(r), fieldsRef.current);
+                const sd = deriveShiftDate(n);
+                return { ...(sd ? { ...n, shiftDate: sd } : n), syncStatus: "synced" };
+              });
+            return newRecs.length ? [...newRecs, ...updated] : updated;
           });
         }
       } catch {
@@ -1099,6 +1112,7 @@ export default function App() {
       ...p,
       [key]: { user: user.name, userId: user.id, ts: new Date().toISOString() },
     }));
+    setUserLoginShift(shift);
   }, [user]);
 
   if (!hydrated) return (
