@@ -35,4 +35,4 @@ chmod +x gradlew
 
 echo ""
 echo "=== TAMAMLANDI ==="
-echo "APK: android/app/build/outputs/apk/debug/app-debug.apk"
+echo "APK: android/app/build/outputs/apk/debug/ScanDesk-debug.apk"
