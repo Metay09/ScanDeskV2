@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getCurrentShift, getShiftEndTime } from "../utils";
-
-const GRACE_PERIOD_SECS = 300; // 5 dakika
+import { GRACE_PERIOD_SECS, SHIFT_CHECK_INTERVAL_MS } from "../constants";
 
 /**
  * Vardiya bitimini ve grace period geri sayımını yönetir.
@@ -50,7 +49,7 @@ export function useShiftTimer(user, isAdmin, userLoginShift, onLogoutRef) {
         setGraceEndTime(endTime);
         setGraceSecsLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
       }
-    }, 15_000);
+    }, SHIFT_CHECK_INTERVAL_MS);
 
     return () => clearInterval(id);
   }, [user, isAdmin, userLoginShift]);

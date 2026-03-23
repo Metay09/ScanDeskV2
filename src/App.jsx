@@ -2,7 +2,8 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } fr
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import "./index.css";
-import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_GSHEETS_ACTIVE, DEFAULT_USER_SETTINGS, DEFAULT_POSTGRES_ACTIVE } from "./constants";
+import { INITIAL_USERS, INITIAL_SETTINGS, INITIAL_FIELDS, DEFAULT_CUSTS, DEFAULT_ACIKLAMAS, DEFAULT_POSTGRES_URL, DEFAULT_POSTGRES_KEY, DEFAULT_GSHEETS_URL, DEFAULT_GSHEETS_ACTIVE, DEFAULT_USER_SETTINGS, DEFAULT_POSTGRES_ACTIVE, GRACE_PERIOD_SECS } from "./constants";
+import { logger } from "./logger";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime, fmtDate } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
@@ -76,14 +77,14 @@ export default function App() {
       aciklamaList: aciklamaListRef.current,
       settings:     settingsRef.current,
       ...patch,
-    }).catch(err => console.warn("[syncConfig]", err));
+    }).catch(err => logger.warn("[syncConfig]", err));
   }, []);
 
   /** Kullanıcı listesini sunucuya iter. */
   const syncUsersToServer = useCallback((updatedUsers) => {
     const int = integrationRef.current;
     if (!int.postgresApi?.active) return;
-    pushServerUsers(int.postgresApi, updatedUsers).catch(err => console.warn("[syncUsers]", err));
+    pushServerUsers(int.postgresApi, updatedUsers).catch(err => logger.warn("[syncUsers]", err));
   }, []);
 
   // İnternet gelince: sunucudan çek → merge → eksik local kullanıcıları push et
@@ -241,7 +242,7 @@ export default function App() {
             if (currentShift !== loginShift) {
               const shiftEnd = getShiftEndTime(loginShift);
               if (shiftEnd) {
-                const graceEnd = shiftEnd + (300 * 1000);
+                const graceEnd = shiftEnd + (GRACE_PERIOD_SECS * 1000);
                 const now = Date.now();
                 sessionValid = now < graceEnd;
                 if (sessionValid) restoredGraceEndTime = graceEnd;
@@ -294,7 +295,7 @@ export default function App() {
             const finalMerged = hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
             setUsers(finalMerged);
             if (localOnly.length > 0) {
-              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(err => console.warn("[syncUsers merge]", err));
+              pushServerUsers(finalIntegration.postgresApi, finalMerged).catch(err => logger.warn("[syncUsers merge]", err));
             }
 
             // ── Aktif oturum yenileme (Madde 2) ──────────────────────────
@@ -390,7 +391,7 @@ export default function App() {
             setRefColMap(colMap);
             saveReferenceTable(table, colMap); // Lokal cache güncelle
           }
-        } catch (err) { console.warn("[fetchRefTable]", err); }
+        } catch (err) { logger.warn("[fetchRefTable]", err); }
       }
 
       setHydrated(true);
@@ -570,7 +571,7 @@ export default function App() {
         return final;
       });
       if (mergedForPush) {
-        pushServerUsers(int.postgresApi, mergedForPush).catch(err => console.warn("[syncUsers polling]", err));
+        pushServerUsers(int.postgresApi, mergedForPush).catch(err => logger.warn("[syncUsers polling]", err));
       }
       // Aktif kullanıcıyı güncelle (Madde 2 mantığı)
       setUser(prev => {
@@ -925,7 +926,7 @@ export default function App() {
           ...ef.map(f => safeValue(getFieldValue(r, f.id)))
         ];
       } catch (err) {
-        console.error("Error processing record:", r, err);
+        logger.error("Error processing record:", r, err);
         // Return a row with error indicator
         return [
           safeValue(r.barcode),
@@ -957,7 +958,7 @@ export default function App() {
           toast("Excel indirildi", "var(--ok)");
         }
       } catch (err) {
-        console.error("Excel export error:", err);
+        logger.error("Excel export error:", err);
         toast("Excel dışa aktarma hatası: " + (err?.message || err), "var(--err)");
       }
     } else {
@@ -976,7 +977,7 @@ export default function App() {
           toast("CSV indirildi", "var(--ok)");
         }
       } catch (err) {
-        console.error("CSV export error:", err);
+        logger.error("CSV export error:", err);
         toast("CSV dışa aktarma hatası: " + (err?.message || err), "var(--err)");
       }
     }

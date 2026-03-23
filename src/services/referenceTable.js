@@ -180,7 +180,7 @@ export function saveReferenceTable(table, colMap) {
     if (err?.name === "QuotaExceededError" || err?.code === 22) {
       return "quota";
     }
-    console.warn("[saveReferenceTable]", err);
+    if (import.meta.env.DEV) console.warn("[saveReferenceTable]", err);
     return false;
   }
 }

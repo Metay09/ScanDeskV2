@@ -3,6 +3,7 @@ import { Ic, I } from "../ui/Icon";
 import PasswordInput from "../ui/PasswordInput";
 import { hashPassword, verifyPassword } from "../../utils";
 import { fetchServerUsers } from "../../services/integrations";
+import { logger } from "../../logger";
 
 export default function Login({ users, onLogin, onMigratePassword, logoutReason, integration }) {
   const [u, setU] = useState("");
@@ -45,7 +46,7 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         }
         onLogin(found, serverUsers);
       } catch (err) {
-        console.warn("[login:server]", err?.message ?? err);
+        logger.warn("[login:server]", err?.message ?? err);
         const url = integration?.postgresApi?.serverUrl || "";
         setErr(`Sunucuya bağlanılamadı${url ? ` (${url})` : ""}. Ağ bağlantısı ve sunucu ayarlarını kontrol edin.`);
       } finally {
