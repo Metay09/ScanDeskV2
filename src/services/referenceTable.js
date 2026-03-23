@@ -37,23 +37,23 @@ export function lotToDate(lot) {
     tarih.setDate(monday.getDate() + (hafta - 1) * 7 + (gun - 1));
 
     const pad = n => String(n).padStart(2, "0");
-    return `${tarih.getFullYear()}-${pad(tarih.getMonth() + 1)}-${pad(tarih.getDate())}`;
+    return `${pad(tarih.getDate())}.${pad(tarih.getMonth() + 1)}.${tarih.getFullYear()}`;
   } catch { return null; }
 }
 
-// ── Tarih normalize → YYYY-MM-DD ─────────────────────────────────────────────
+// ── Tarih normalize → DD.MM.YYYY ─────────────────────────────────────────────
 export function normalizeDate(val) {
   if (!val) return "";
+  const pad = n => String(n).padStart(2, "0");
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return "";
-    const pad = n => String(n).padStart(2, "0");
-    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}`;
+    return `${pad(val.getUTCDate())}.${pad(val.getUTCMonth() + 1)}.${val.getUTCFullYear()}`;
   }
   const s = String(val).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) {
-    const [d, m, y] = s.split(".");
-    return `${y}-${m}-${d}`;
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-");
+    return `${d}.${m}.${y}`;
   }
   return s;
 }
