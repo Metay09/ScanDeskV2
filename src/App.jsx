@@ -641,7 +641,7 @@ export default function App() {
     } catch { /* sessiz */ }
   }, []);
 
-  const handleRefTableSave = useCallback(async (table, colMap) => {
+  const handleRefTableSave = useCallback(async (table, colMap, stats) => {
     const saved = saveReferenceTable(table, colMap);
     setRefTable(table);
     setRefColMap(colMap);
@@ -651,15 +651,21 @@ export default function App() {
       return;
     }
 
+    const unique = Object.keys(table).length;
+    const parts = [];
+    if (stats?.skipped > 0) parts.push(`${stats.skipped} boş satır atlandı`);
+    if (stats?.merged  > 0) parts.push(`${stats.merged} satır birleştirildi`);
+    const detail = parts.length ? ` (${parts.join(", ")})` : "";
+
     if (integration.postgresApi?.active) {
       try {
         await pushServerRefTable(integration.postgresApi, table, colMap);
-        toast(`${Object.keys(table).length} palet yüklendi ve senkronize edildi`, "var(--ok)");
+        toast(`${unique} palet yüklendi ve senkronize edildi${detail}`, "var(--ok)");
       } catch {
-        toast(`${Object.keys(table).length} palet yüklendi (sunucu senkronizasyonu başarısız)`, "var(--acc)");
+        toast(`${unique} palet yüklendi (sunucu senkronizasyonu başarısız)${detail}`, "var(--acc)");
       }
     } else {
-      toast(`${Object.keys(table).length} palet yüklendi`, "var(--ok)");
+      toast(`${unique} palet yüklendi${detail}`, "var(--ok)");
     }
   }, [integration, toast]);
 

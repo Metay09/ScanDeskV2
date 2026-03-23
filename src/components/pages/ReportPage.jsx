@@ -293,8 +293,8 @@ export default function ReportPage({
     for (const header of extraSelected) {
       finalColMap[`_extra_${header}`] = header;
     }
-    const table = buildTableFromRows(pendingRows, finalColMap);
-    onRefTableSave(table, finalColMap);
+    const { table, stats } = buildTableFromRows(pendingRows, finalColMap);
+    onRefTableSave(table, finalColMap, stats);
     setShowMapper(false);
     setUploadErr("");
     setPendingRows([]);

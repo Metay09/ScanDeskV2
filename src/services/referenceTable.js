@@ -141,13 +141,16 @@ function rowToRecord(row, colMap) {
 
 // ── Tablo oluştur ────────────────────────────────────────────────────────────
 export function buildTableFromRows(rows, colMap) {
-  if (!Array.isArray(rows) || !colMap) return {};
+  if (!Array.isArray(rows) || !colMap) return { table: {}, stats: { total: 0, skipped: 0, merged: 0 } };
   const table = {};
+  let skipped = 0;
+  let merged  = 0;
   for (const row of rows) {
     const rec = rowToRecord(row, colMap);
-    if (!rec || !rec.paletKodu) continue;
+    if (!rec || !rec.paletKodu) { skipped++; continue; }
     if (table[rec.paletKodu]) {
       // Aynı palet koduna birden fazla satır → miktar ve koli topla
+      merged++;
       const ex = table[rec.paletKodu];
       table[rec.paletKodu] = {
         ...ex,
@@ -158,7 +161,7 @@ export function buildTableFromRows(rows, colMap) {
       table[rec.paletKodu] = rec;
     }
   }
-  return table;
+  return { table, stats: { total: rows.length, skipped, merged } };
 }
 
 // ── Kaydet ───────────────────────────────────────────────────────────────────
