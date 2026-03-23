@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { SYNC_QUEUE_DELAY_MS } from "../constants";
 import { createQueueItem, addToQueue, removeFromQueue, getRetryableItems, markAsProcessing, markAsFailed } from "../services/syncQueue";
 import { postgresApiInsert, postgresApiUpdate, postgresApiDelete, sheetsDelete, syncRecordToSheets } from "../services/integrations";
 import { toDbPayload } from "../services/recordModel";
@@ -46,7 +47,7 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
     });
 
     if (retryable.length === 0) {
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, SYNC_QUEUE_DELAY_MS));
       setIsSyncing(false);
       if (!silent) toast("Bekleyen işlem yok", "var(--ok)");
       return { success: 0, failed: 0 };

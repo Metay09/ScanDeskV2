@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { SSE_POLLING_INTERVAL_MS, SSE_RECONNECT_DELAY_MS } from "../constants";
 
 /**
  * SSE tabanlı gerçek zamanlı senkronizasyon hook'u.
@@ -50,7 +51,7 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
       try { await onConfigUpdateRef.current?.(); }   catch { /* sessiz */ }
       try { await onRefTableUpdateRef.current?.(); } catch { /* sessiz */ }
       try { await onRecordsSyncRef.current?.(); }    catch { /* sessiz */ }
-    }, 30000);
+    }, SSE_POLLING_INTERVAL_MS);
   }, []);
 
   const connect = useCallback(() => {
@@ -115,7 +116,7 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
         reconnectRef.current = setTimeout(() => {
           reconnectRef.current = null;
           connect();
-        }, 3000);
+        }, SSE_RECONNECT_DELAY_MS);
       }
     };
   }, [integration, startPolling]);

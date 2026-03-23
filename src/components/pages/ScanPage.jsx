@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Ic, I } from "../ui/Icon";
-import { genId } from "../../constants";
+import { genId, USER_SHIFT_CHECK_MS, FLASH_RESET_DELAY_MS, AUTO_SAVE_DEBOUNCE_MS } from "../../constants";
+import { logger } from "../../logger";
 import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../../utils";
 import { postgresApiInsert, syncRecordToSheets } from "../../services/integrations";
 import { toDbPayload } from "../../services/recordModel";
@@ -96,7 +97,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     if (isAdmin) return;
     const interval = setInterval(() => {
       setUserShift(getCurrentShift());
-    }, 60000); // Check every minute
+    }, USER_SHIFT_CHECK_MS);
     return () => clearInterval(interval);
   }, [isAdmin]);
 
@@ -115,7 +116,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     try {
       localStorage.setItem("scandesk_default_customer", customer);
     } catch (e) {
-      console.error("Failed to save customer to localStorage:", e);
+      logger.error("Failed to save customer to localStorage:", e);
     }
   }, [customer]);
 
@@ -124,7 +125,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     try {
       localStorage.setItem("scandesk_default_aciklama", aciklama);
     } catch (e) {
-      console.error("Failed to save aciklama to localStorage:", e);
+      logger.error("Failed to save aciklama to localStorage:", e);
     }
   }, [aciklama]);
 
@@ -133,7 +134,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     try {
       localStorage.setItem("scandesk_sticky_fields", JSON.stringify(extras));
     } catch (e) {
-      console.error("Failed to save sticky fields to localStorage:", e);
+      logger.error("Failed to save sticky fields to localStorage:", e);
     }
   }, [extras]);
 
@@ -275,7 +276,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
     setPendingBc(null);
     setExtras({});
     setFlash("saved");
-    setTimeout(() => { setFlash("ready"); scheduleFocus(); }, 700);
+    setTimeout(() => { setFlash("ready"); scheduleFocus(); }, FLASH_RESET_DELAY_MS);
     if (vibration && navigator.vibrate) navigator.vibrate([25, 15, 25]);
     if (beep) playBeep();
 
@@ -333,7 +334,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
       } else {
         onBarcode(trimmedBarcode);
       }
-    }, 550);
+    }, AUTO_SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(autoSaveTimer.current);
   }, [barcode, autoSave, scanSettings.enforceBarcodeLengthMatch, pendingBc, addDetailAfterScan, onBarcode, validateBarcodeForSave, toast]);

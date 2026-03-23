@@ -22,13 +22,24 @@ export const INITIAL_USERS = [
   },
 ];
 
-// Entegrasyon varsayılan değerleri — her zaman dolu ve aktif gelir.
-// Admin Ayarlar'dan değiştirebilir.
-export const DEFAULT_POSTGRES_URL    = import.meta.env.VITE_SERVER_URL || "https://scandesk.simsekhome.site";
-export const DEFAULT_POSTGRES_KEY    = import.meta.env.VITE_API_KEY    || "scandesk_FlliIGbhQq7PCUN5m54O5kvp";
-export const DEFAULT_GSHEETS_URL     = import.meta.env.VITE_GSHEETS_URL || "https://script.google.com/macros/s/AKfycbywRIk85STTKY9oF9H7fu186t1WqAr26qTc_vM2w7kXd_Iq4oYpn7yu3LmPaUOHOqQj/exec";
+// Entegrasyon varsayılan değerleri — ortam değişkenlerinden okunur.
+// VITE_* değerleri build sırasında inject edilmelidir (.env veya Docker build-arg).
+export const DEFAULT_POSTGRES_URL    = import.meta.env.VITE_SERVER_URL  || "";
+export const DEFAULT_POSTGRES_KEY    = import.meta.env.VITE_API_KEY     || "";
+export const DEFAULT_GSHEETS_URL     = import.meta.env.VITE_GSHEETS_URL || "";
 export const DEFAULT_GSHEETS_ACTIVE  = true;
 export const DEFAULT_POSTGRES_ACTIVE = true;
+
+// ── Zamanlama sabitleri ─────────────────────────────────────────────────────
+export const GRACE_PERIOD_SECS       = 300;       // Vardiya bitimi grace period (5 dakika)
+export const TOAST_DURATION_MS       = 2800;      // Bildirim görüntüleme süresi
+export const SYNC_QUEUE_DELAY_MS     = 600;       // Kuyruk boşsa bekleme süresi
+export const SSE_POLLING_INTERVAL_MS = 30_000;    // Sunucu polling aralığı (30s)
+export const SSE_RECONNECT_DELAY_MS  = 3_000;     // SSE yeniden bağlanma gecikmesi (3s)
+export const SHIFT_CHECK_INTERVAL_MS = 15_000;    // Vardiya değişimi kontrol aralığı (15s)
+export const USER_SHIFT_CHECK_MS     = 60_000;    // Kullanıcı vardiya güncelleme aralığı (1dk)
+export const FLASH_RESET_DELAY_MS    = 700;       // Tarama flash sıfırlama gecikmesi
+export const AUTO_SAVE_DEBOUNCE_MS   = 550;       // Otomatik kaydetme debounce süresi
 
 // Admin (global) ayarlar — sadece admin değiştirebilir, tüm cihazlara uygulanır
 export const INITIAL_SETTINGS = {

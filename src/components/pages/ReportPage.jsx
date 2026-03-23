@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { logger } from "../../logger";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import {
@@ -270,7 +271,7 @@ export default function ReportPage({
       }
       setShowMapper(true);
     } catch (err) {
-      console.error("Excel parse error:", err);
+      logger.error("Excel parse error:", err);
       setUploadErr("Dosya okunurken hata oluştu.");
     } finally {
       setUploading(false);
@@ -368,7 +369,7 @@ export default function ReportPage({
         }
       }
     } catch (err) {
-      console.error("Export error:", err);
+      logger.error("Export error:", err);
       toast?.("Dışa aktarma hatası: " + (err?.message || err), "var(--err)");
     }
   };
