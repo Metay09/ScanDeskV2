@@ -42,8 +42,8 @@ export function lotToDate(lot) {
 }
 
 // ── Tarih normalize → DD.MM.YYYY ─────────────────────────────────────────────
-// XLSX.js (cellDates: true) tarih hücrelerini UTC gece yarısı (00:00:00Z) olarak
-// Date nesnesine dönüştürür. UTC metodları tüm saat dilimlerinde doğru sonuç verir.
+// Excel raw:false ile hücreler görüntü metni olarak gelir (ör. "15.06.2024").
+// Date nesnesi gelmesi durumunda UTC metodları kullanılır (güvenlik).
 export function normalizeDate(val) {
   if (!val) return "";
   const pad = n => String(n).padStart(2, "0");
