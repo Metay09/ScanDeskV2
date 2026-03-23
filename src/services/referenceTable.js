@@ -42,12 +42,14 @@ export function lotToDate(lot) {
 }
 
 // ── Tarih normalize → DD.MM.YYYY ─────────────────────────────────────────────
+// Excel raw:false ile hücreler görüntü metni olarak gelir (ör. "15.06.2024").
+// Date nesnesi gelmesi durumunda UTC metodları kullanılır (güvenlik).
 export function normalizeDate(val) {
   if (!val) return "";
   const pad = n => String(n).padStart(2, "0");
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return "";
-    return `${pad(val.getDate())}.${pad(val.getMonth() + 1)}.${val.getFullYear()}`;
+    return `${pad(val.getUTCDate())}.${pad(val.getUTCMonth() + 1)}.${val.getUTCFullYear()}`;
   }
   const s = String(val).trim();
   if (/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return s;
