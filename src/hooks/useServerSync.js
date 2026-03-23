@@ -45,14 +45,11 @@ export function useServerSync({ integration, onUsersUpdate, onConfigUpdate, onTa
   const startPolling = useCallback(() => {
     if (pollingRef.current) return;
     pollingRef.current = setInterval(async () => {
-      if (!sseWorkingRef.current) {
-        // SSE çalışmıyor — kullanıcı ve config de senkronize et
-        try { await onUsersUpdateRef.current?.(); }  catch { /* sessiz */ }
-        try { await onConfigUpdateRef.current?.(); } catch { /* sessiz */ }
-      }
-      // SSE aktif olsa da kayıt senkronizasyonunu her zaman yap
-      // (SSE eventi gözden kaçırılmış olabilir; syncStatus güncellemelerini de yakalar)
-      try { await onRecordsSyncRef.current?.(); }  catch { /* sessiz */ }
+      // SSE eventi gözden kaçırılmış olabilir — tüm veri tiplerini her zaman sync'le
+      try { await onUsersUpdateRef.current?.(); }    catch { /* sessiz */ }
+      try { await onConfigUpdateRef.current?.(); }   catch { /* sessiz */ }
+      try { await onRefTableUpdateRef.current?.(); } catch { /* sessiz */ }
+      try { await onRecordsSyncRef.current?.(); }    catch { /* sessiz */ }
     }, 30000);
   }, []);
 
