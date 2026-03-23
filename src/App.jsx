@@ -1112,6 +1112,7 @@ export default function App() {
       ...p,
       [key]: { user: user.name, userId: user.id, ts: new Date().toISOString() },
     }));
+    setUserLoginShift(shift);
   }, [user]);
 
   if (!hydrated) return (
