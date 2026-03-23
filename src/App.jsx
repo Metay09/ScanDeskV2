@@ -101,8 +101,10 @@ export default function App() {
           );
           if (localOnly.length > 0) {
             const merged = [...su, ...localOnly];
-            setUsers(merged);
-            await pushServerUsers(int.postgresApi, merged);
+            const hasAdmin = merged.some(u => u.username === "admin");
+            const final = hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
+            setUsers(final);
+            await pushServerUsers(int.postgresApi, final);
           }
         } else {
           await pushServerUsers(int.postgresApi, usersRef.current);
@@ -556,13 +558,20 @@ export default function App() {
       const su = await fetchServerUsers(int.postgresApi);
       if (!Array.isArray(su) || !su.length) return;
       const serverByUsername = Object.fromEntries(su.map(u => [u.username, u]));
+      let mergedForPush = null;
       setUsers(prev => {
         const serverById = Object.fromEntries(su.map(u => [u.id, u]));
         const localOnly = prev.filter(u => !serverById[u.id] && !serverByUsername[u.username]);
         const merged = [...su, ...localOnly];
         const hasAdmin = merged.some(u => u.username === "admin");
-        return hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
+        const final = hasAdmin ? merged : [INITIAL_USERS[0], ...merged];
+        // Lokal-only kullanıcılar varsa sunucuya push et (PostgreSQL geri geldiğinde sync için)
+        if (localOnly.length > 0) mergedForPush = final;
+        return final;
       });
+      if (mergedForPush) {
+        pushServerUsers(int.postgresApi, mergedForPush).catch(err => console.warn("[syncUsers polling]", err));
+      }
       // Aktif kullanıcıyı güncelle (Madde 2 mantığı)
       setUser(prev => {
         if (!prev) return prev;
