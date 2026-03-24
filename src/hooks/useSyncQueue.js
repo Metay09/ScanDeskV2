@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { SYNC_QUEUE_DELAY_MS } from "../constants";
 import { createQueueItem, addToQueue, removeFromQueue, getRetryableItems, markAsProcessing, markAsFailed } from "../services/syncQueue";
 import { postgresApiInsert, postgresApiUpdate, postgresApiDelete, sheetsDelete, syncRecordToSheets } from "../services/integrations";
@@ -16,7 +16,13 @@ import { toDbPayload } from "../services/recordModel";
  */
 export function useSyncQueue(integration, toast, onSyncUpdate) {
   const [syncQueue, setSyncQueue] = useState([]);
+  // Ref: processSyncQueue'nun stale closure sorunu yaşamadan her zaman
+  // güncel kuyruğu okuyabilmesi için state'in aynasını tutuyoruz.
+  const syncQueueRef = useRef([]);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // syncQueue state'i değiştiğinde ref'i güncelle
+  useEffect(() => { syncQueueRef.current = syncQueue; }, [syncQueue]);
 
   const retryableCount = getRetryableItems(syncQueue).length;
 
@@ -41,7 +47,9 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
 
     setIsSyncing(true);
 
-    const retryable = getRetryableItems(syncQueue).filter(item => {
+    // syncQueueRef.current kullan: addToSyncQueue ile eklenen öğeler
+    // henüz React state commit edilmeden çağrıldığında bile güncel listeyi görür.
+    const retryable = getRetryableItems(syncQueueRef.current).filter(item => {
       const type = item.integrationType || "postgres_api";
       return (type === "postgres_api" && pgActive) || (type === "gsheets" && gsActive);
     });
@@ -106,14 +114,30 @@ export function useSyncQueue(integration, toast, onSyncUpdate) {
     }
 
     return { success: successCount, failed: failedCount, retried: retriedCount };
-  }, [integration, isSyncing, syncQueue, onSyncUpdate, toast]);
+  }, [integration, isSyncing, onSyncUpdate, toast]); // syncQueue bağımlılığı kaldırıldı — ref üzerinden okunuyor
+
+  // processSyncQueue'nun en güncel halini ref'te tutuyoruz.
+  // Auto-process effect'i re-render sonrası en güncel fonksiyonu çağırabilsin.
+  const processSyncQueueRef = useRef(processSyncQueue);
+  useEffect(() => { processSyncQueueRef.current = processSyncQueue; });
+
+  // Kuyruğa yeni "pending" öğe eklendiğinde otomatik işle.
+  // İnternet bağlantısı kesiliyken biriken items, bağlantı gelince de işlenir.
+  useEffect(() => {
+    const pending = syncQueue.filter(i => i.status === "pending");
+    if (pending.length > 0 && !isSyncing) {
+      // Küçük gecikme: React state commit'inin tamamlanmasını bekle
+      const t = setTimeout(() => processSyncQueueRef.current(true), 50);
+      return () => clearTimeout(t);
+    }
+  }, [syncQueue.length, isSyncing]);
 
   // İnternet bağlantısı geldiğinde bekleyenleri otomatik senkronize et
   useEffect(() => {
-    const handleOnline = () => processSyncQueue(true);
+    const handleOnline = () => processSyncQueueRef.current(true);
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-  }, [processSyncQueue]);
+  }, []);
 
   return { syncQueue, setSyncQueue, isSyncing, retryableCount, addToSyncQueue, processSyncQueue };
 }

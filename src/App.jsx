@@ -7,7 +7,7 @@ import { logger } from "./logger";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime, fmtDate } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
+import { postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
 import { loadReferenceTable, loadColMap, saveReferenceTable, clearReferenceTable, fetchServerRefTable, pushServerRefTable } from "./services/referenceTable";
 import { toDbPayload, fromDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
@@ -750,10 +750,7 @@ export default function App() {
     }
 
     if (integration.gsheets?.active) {
-      ids.forEach(id => {
-        sheetsDelete(integration.gsheets, id)
-          .catch(() => addToSyncQueue("delete", id, { id }, "gsheets"));
-      });
+      ids.forEach(id => addToSyncQueue("delete", id, { id }, "gsheets"));
     }
   }, [records, integration, toast, addToSyncQueue]);
   const handleEdit = useCallback((r) => {
@@ -804,10 +801,7 @@ export default function App() {
 
       // Sync each deletion to Google Sheets if integration is active
       if (integration.gsheets?.active) {
-        recordsToDelete.forEach(record => {
-          sheetsDelete(integration.gsheets, record.id)
-            .catch(() => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
-        });
+        recordsToDelete.forEach(record => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
         if (recordsToDelete.length > 0) {
           toast(`Google Sheets'den ${recordsToDelete.length} kayıt siliniyor...`, "var(--acc)");
         }
@@ -852,10 +846,7 @@ export default function App() {
 
     // Sync each deletion to Google Sheets if integration is active
     if (integration.gsheets?.active) {
-      recordsToDelete.forEach(record => {
-        sheetsDelete(integration.gsheets, record.id)
-          .catch(() => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
-      });
+      recordsToDelete.forEach(record => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
       if (recordsToDelete.length > 0) {
         toast(`Google Sheets'den ${recordsToDelete.length} kayıt siliniyor...`, "var(--acc)");
       }
