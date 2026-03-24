@@ -113,9 +113,7 @@ export default function ReportPage({
   // ── Admin record filtreleri ──────────────────────────────────────────────────
   const [selectedDate,  setSelectedDate]  = useState(() => fmtDate());
   const [selectedShift, setSelectedShift] = useState(null);
-  const [selectedUser,  setSelectedUser]  = useState(null);
   const [shiftOpen,     setShiftOpen]     = useState(false);
-  const [userOpen,      setUserOpen]      = useState(false);
   const [filterPopupPos, setFilterPopupPos] = useState(null);
   const [showColPicker, setShowColPicker] = useState(false);
 
@@ -150,12 +148,11 @@ export default function ReportPage({
       return records.filter(r => {
         if (selectedDate  && deriveShiftDate(r) !== selectedDate)   return false;
         if (selectedShift && r.shift !== selectedShift)              return false;
-        if (selectedUser  && r.scanned_by_username !== selectedUser) return false;
         return true;
       });
     }
     return records.filter(r => r.shift === currentShift);
-  }, [records, isAdmin, currentShift, selectedDate, selectedShift, selectedUser]);
+  }, [records, isAdmin, currentShift, selectedDate, selectedShift]);
 
   // Ekstra Excel kolonları değişince visibleCols'a ekle (varsayılan: görünür)
   useEffect(() => {
@@ -554,7 +551,7 @@ export default function ReportPage({
               <div style={{ position: "relative" }}>
                 <button
                   className={`btn btn-sm ${selectedShift ? "btn-info" : "btn-ghost"}`}
-                  onClick={() => { setShiftOpen(p => !p); setUserOpen(false); }}>
+                  onClick={() => setShiftOpen(p => !p)}>
                   {selectedShift || "Vardiya"}
                 </button>
                 {shiftOpen && (
@@ -574,34 +571,6 @@ export default function ReportPage({
                   </div>
                 )}
               </div>
-              <div style={{ position: "relative" }}>
-                <button
-                  className={`btn btn-sm ${selectedUser ? "btn-info" : "btn-ghost"}`}
-                  onClick={() => { setUserOpen(p => !p); setShiftOpen(false); }}>
-                  {selectedUser
-                    ? (users?.find(u => u.username === selectedUser)?.name || selectedUser)
-                    : "Kullanıcı"}
-                </button>
-                {userOpen && (
-                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0,
-                    background: "var(--bg2)", border: "1px solid var(--brd)", borderRadius: 8,
-                    zIndex: 99, minWidth: 140 }}>
-                    {[null, ...(users ?? []).filter(u => u.active !== false)].map(v => {
-                      const uname = v?.username ?? null;
-                      return (
-                        <div key={uname ?? "__all"}
-                          onClick={() => { setSelectedUser(uname); setUserOpen(false); }}
-                          style={{ padding: "10px 14px", cursor: "pointer",
-                            fontWeight: uname === selectedUser ? 700 : 400,
-                            color: uname === selectedUser ? "var(--inf)" : "var(--tx1)",
-                            fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
-                          {v ? (v.name || v.username) : "Tümü"}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             </>
           )}
           {anyFilter && (
@@ -611,8 +580,8 @@ export default function ReportPage({
           )}
           {hasTable && (
             <>
-              <button className="btn btn-sm btn-ghost" onClick={() => handleExport("csv")}>CSV</button>
-              <button className="btn btn-sm btn-ghost" onClick={() => handleExport("xlsx")}>XLSX</button>
+              <button className="btn btn-sm btn-pur" onClick={() => handleExport("csv")}>CSV</button>
+              <button className="btn btn-sm btn-ok" onClick={() => handleExport("xlsx")}>XLSX</button>
               <div style={{ position: "relative" }} id="rp-col-picker">
                 <button className="btn btn-sm btn-ghost" onClick={() => setShowColPicker(p => !p)}>
                   Kolonlar ☰
