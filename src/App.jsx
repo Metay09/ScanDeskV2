@@ -7,7 +7,7 @@ import { logger } from "./logger";
 import { isNative, loadState, saveState } from "./services/storage";
 import { getCurrentShift, pad2, deriveShiftDate, getShiftDate, getShiftEndTime, fmtDate } from "./utils";
 import { normalizeRecord, migrateRecords } from "./services/recordModel";
-import { sheetsDelete, postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
+import { postgresApiInsert, postgresApiUpdate, postgresApiDelete, syncRecordToSheets, fetchServerUsers, pushServerUsers, fetchServerConfig, pushServerConfig, fetchServerRecords, fetchServerRecord } from "./services/integrations";
 import { loadReferenceTable, loadColMap, saveReferenceTable, clearReferenceTable, fetchServerRefTable, pushServerRefTable } from "./services/referenceTable";
 import { toDbPayload, fromDbPayload } from "./services/recordModel";
 import { useToast } from "./hooks/useToast";
@@ -750,10 +750,7 @@ export default function App() {
     }
 
     if (integration.gsheets?.active) {
-      ids.forEach(id => {
-        sheetsDelete(integration.gsheets, id)
-          .catch(() => addToSyncQueue("delete", id, { id }, "gsheets"));
-      });
+      ids.forEach(id => addToSyncQueue("delete", id, { id }, "gsheets"));
     }
   }, [records, integration, toast, addToSyncQueue]);
   const handleEdit = useCallback((r) => {
@@ -776,8 +773,7 @@ export default function App() {
     }
 
     if (integration.gsheets?.active) {
-      syncRecordToSheets(integration.gsheets, rec, fields)
-        .catch(() => addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets"));
+      addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets");
     }
   }, [fields, addShiftDate, integration, toast, handleSyncUpdate, addToSyncQueue]);
 
@@ -804,10 +800,7 @@ export default function App() {
 
       // Sync each deletion to Google Sheets if integration is active
       if (integration.gsheets?.active) {
-        recordsToDelete.forEach(record => {
-          sheetsDelete(integration.gsheets, record.id)
-            .catch(() => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
-        });
+        recordsToDelete.forEach(record => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
         if (recordsToDelete.length > 0) {
           toast(`Google Sheets'den ${recordsToDelete.length} kayıt siliniyor...`, "var(--acc)");
         }
@@ -852,10 +845,7 @@ export default function App() {
 
     // Sync each deletion to Google Sheets if integration is active
     if (integration.gsheets?.active) {
-      recordsToDelete.forEach(record => {
-        sheetsDelete(integration.gsheets, record.id)
-          .catch(() => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
-      });
+      recordsToDelete.forEach(record => addToSyncQueue("delete", record.id, { id: record.id }, "gsheets"));
       if (recordsToDelete.length > 0) {
         toast(`Google Sheets'den ${recordsToDelete.length} kayıt siliniyor...`, "var(--acc)");
       }
@@ -1232,7 +1222,7 @@ export default function App() {
 
       {/* CONTENT */}
       <div className="scroll-area" ref={scrollAreaRef}>
-        {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={effectiveSettings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} />}
+        {page === "scan"     && <ScanPage fields={fields} onSave={handleSave} onEdit={handleEdit} onSyncUpdate={handleSyncUpdate} records={records} lastSaved={lastSaved} customers={customers} aciklamalar={aciklamalar} isAdmin={isAdmin} user={user} integration={integration} scanSettings={effectiveSettings} toast={toast} shiftExpired={graceSecsLeft !== null && !isAdmin} shiftTakeovers={shiftTakeovers} onShiftTakeover={handleShiftTakeover} addToSyncQueue={addToSyncQueue} processSyncQueue={processSyncQueue} />}
         {page === "data"     && <DataPage     fields={fields} records={records} onDelete={handleDelete} onEdit={handleEdit} onExport={handleExport} onImport={handleImport} customers={customers} aciklamalar={aciklamalar} settings={effectiveSettings} toast={toast} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} users={users} integration={integration} onSyncUpdate={handleSyncUpdate} />}
         {page === "report"   && <ReportPage   records={records} fields={fields} isAdmin={isAdmin} currentShift={userLoginShift || getCurrentShift()} user={user} users={users} refTable={refTable} refColMap={refColMap} onRefTableSave={handleRefTableSave} onRefTableClear={handleRefTableClear} toast={toast} />}
         {page === "fields"   && <FieldsPage   fields={fields} setFields={updateFields} isAdmin={isAdmin} settings={effectiveSettings} />}

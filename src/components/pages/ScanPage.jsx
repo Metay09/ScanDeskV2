@@ -3,7 +3,7 @@ import { Ic, I } from "../ui/Icon";
 import { genId, USER_SHIFT_CHECK_MS, FLASH_RESET_DELAY_MS, AUTO_SAVE_DEBOUNCE_MS } from "../../constants";
 import { logger } from "../../logger";
 import { fmtDate, fmtTime, nowTs, playBeep, getCurrentShift, FIXED_SHIFTS, getCustomerList, getAciklamaList, getShiftDate, deriveShiftDate } from "../../utils";
-import { postgresApiInsert, syncRecordToSheets } from "../../services/integrations";
+import { postgresApiInsert } from "../../services/integrations";
 import { toDbPayload } from "../../services/recordModel";
 import EditRecordModal from "../modals/EditRecordModal";
 import CustomerPicker from "../shared/CustomerPicker";
@@ -13,7 +13,7 @@ import ShiftTakeoverPrompt from "../modals/ShiftTakeoverPrompt";
 import FieldInput from "../shared/FieldInput";
 import DetailFormModal from "../modals/DetailFormModal";
 
-export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, aciklamalar, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue }) {
+export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, aciklamalar, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue, processSyncQueue }) {
   const customerList = getCustomerList(customers);
   const aciklamaList = getAciklamaList(aciklamalar);
   const normalizeCustomer = (val) => val === "-Boş-" ? "" : val;
@@ -291,8 +291,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
         });
     }
     if (integration.gsheets?.active) {
-      syncRecordToSheets(integration.gsheets, row, fields)
-        .catch(() => addToSyncQueue?.("create", row.id, { record: row, fields }, "gsheets"));
+      addToSyncQueue?.("create", row.id, { record: row, fields }, "gsheets");
     }
   }, [customer, aciklama, extras, fields, user, onSave, onSyncUpdate, scheduleFocus, vibration, beep, integration, toast, isAdmin, adminShift, adminDate, validateBarcodeForSave, addToSyncQueue]);
 
@@ -400,10 +399,13 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
           });
       }
       if (integration.gsheets?.active) {
-        syncRecordToSheets(integration.gsheets, newRecord, fields)
-          .catch(() => addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets"));
+        addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets");
       }
     });
+
+    if (integration.gsheets?.active && toCopy.length > 0) {
+      processSyncQueue?.(true);
+    }
 
     setInheritModal(false);
 
