@@ -378,6 +378,7 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
         id: genId(),
         timestamp: now.toISOString(),
         shift: targetShift,
+        shiftDate: todayStr,
         scanned_by: user.name,
         scanned_by_username: user.username,
         source: "shift_takeover",
