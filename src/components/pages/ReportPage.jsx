@@ -580,8 +580,8 @@ export default function ReportPage({
           )}
           {hasTable && (
             <>
-              <button className="btn btn-sm btn-ghost" onClick={() => handleExport("csv")}>CSV</button>
-              <button className="btn btn-sm btn-ghost" onClick={() => handleExport("xlsx")}>XLSX</button>
+              <button className="btn btn-sm btn-info" onClick={() => handleExport("csv")}>CSV</button>
+              <button className="btn btn-sm btn-ok" onClick={() => handleExport("xlsx")}>XLSX</button>
               <div style={{ position: "relative" }} id="rp-col-picker">
                 <button className="btn btn-sm btn-ghost" onClick={() => setShowColPicker(p => !p)}>
                   Kolonlar ☰

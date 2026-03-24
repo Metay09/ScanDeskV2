@@ -320,7 +320,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
           {settings.allowExport && (
             <>
               <button className="btn btn-ok btn-full" onClick={() => onExport("xlsx")}><Ic d={I.xlsx} s={15} /> Excel</button>
-              <button className="btn btn-ghost btn-full" onClick={() => onExport("csv")}><Ic d={I.csv} s={15} /> CSV</button>
+              <button className="btn btn-info btn-full" onClick={() => onExport("csv")}><Ic d={I.csv} s={15} /> CSV</button>
             </>
           )}
           {settings.allowImport && (
