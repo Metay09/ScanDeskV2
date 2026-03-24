@@ -929,9 +929,39 @@ export default function App() {
     });
     if (type === "xlsx") {
       try {
-        const XLSX = await import("xlsx");
+        const XLSX = await import("xlsx-js-style");
         const ws = XLSX.utils.aoa_to_sheet([hdr, ...data]);
-        ws["!cols"] = hdr.map(() => ({ wch: 20 }));
+
+        // Hücre stilleri: koyu gri başlık + ince gri kenarlık (tüm hücreler)
+        const CELL_BORDER = {
+          top:    { style: "thin", color: { rgb: "C0C0C0" } },
+          bottom: { style: "thin", color: { rgb: "C0C0C0" } },
+          left:   { style: "thin", color: { rgb: "C0C0C0" } },
+          right:  { style: "thin", color: { rgb: "C0C0C0" } },
+        };
+        const HEADER_STYLE = {
+          fill: { fgColor: { rgb: "595959" } },
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: CELL_BORDER,
+        };
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        for (let R = range.s.r; R <= range.e.r; R++) {
+          for (let C = range.s.c; C <= range.e.c; C++) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+            if (!ws[addr]) continue;
+            ws[addr].s = R === 0 ? HEADER_STYLE : { border: CELL_BORDER };
+          }
+        }
+
+        // Başlık satırı yüksekliği + autofit sütun genişliği
+        ws["!rows"] = [{ hpt: 20 }];
+        ws["!cols"] = hdr.map((h, ci) => {
+          const dataLen = data.reduce((max, row) =>
+            Math.max(max, String(row[ci] ?? "").length), 0);
+          return { wch: Math.min(Math.max(h.length, dataLen) + 2, 60) };
+        });
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Taramalar");
         const filename = `scandesk_${new Date().toISOString().slice(0, 10)}.xlsx`;
