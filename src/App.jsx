@@ -596,8 +596,6 @@ export default function App() {
       const sc = await fetchServerConfig(int.postgresApi);
       if (!sc) return;
       if (Array.isArray(sc.fields) && sc.fields.length) setFields(sc.fields);
-      if (Array.isArray(sc.custList) && sc.custList.length) setCustList(sc.custList);
-      if (Array.isArray(sc.aciklamaList)) setAciklamaList(sc.aciklamaList);
       if (sc.settings) setSettings(sc.settings);
     } catch { /* sessiz */ }
   }, []);
@@ -1081,7 +1079,6 @@ export default function App() {
       const next = custList.filter(c => c !== name);
       setCustList(next);
       syncUserLists(next, undefined);
-      syncConfigToServer({ custList: next });
     },
   };
 
@@ -1098,7 +1095,6 @@ export default function App() {
       const next = aciklamaList.filter(a => a !== name);
       setAciklamaList(next);
       syncUserLists(undefined, next);
-      syncConfigToServer({ aciklamaList: next });
     },
   };
 
