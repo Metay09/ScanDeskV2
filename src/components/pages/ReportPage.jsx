@@ -25,6 +25,35 @@ const BASE_COLS = [
   { id: "kullanici",  label: "Kullanıcı",          fixed: false },
 ];
 
+// Export için kolon tipleri
+const NUM_COLS  = new Set(["miktar", "koliAdet"]);
+const DATE_COLS = new Set(["tarih", "skt", "tarihLT"]);
+
+/** "DD.MM.YYYY" → JS Date (UTC gece yarısı). Hatalıysa null döner. */
+function parseDDMMYYYY(s) {
+  if (!s || typeof s !== "string") return null;
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Ham string değeri export için uygun tipe çevirir.
+ * XLSX'te Date/number olarak kalır; CSV'de string'e döner.
+ */
+function toExportVal(colId, raw) {
+  if (raw === "" || raw == null) return "";
+  if (NUM_COLS.has(colId)) {
+    const n = parseFloat(raw);
+    return isNaN(n) ? raw : n;
+  }
+  if (DATE_COLS.has(colId)) {
+    return parseDDMMYYYY(raw) ?? raw;
+  }
+  return raw;
+}
+
 // Varsayılan gizli kolonlar
 const HIDDEN_BY_DEFAULT = new Set(["skt", "aciklama"]);
 // Veri varsa otomatik gösterilen kolonlar (başlangıçta gizli)
@@ -355,17 +384,34 @@ export default function ReportPage({
       toast?.("Dışa aktarılacak kayıt yok", "var(--acc)");
       return;
     }
-    const hdr  = activeCols.map(c => c.label);
-    const data = sortedRows.map(r => activeCols.map(c => String(r[c.id] ?? "")));
+    const hdr      = activeCols.map(c => c.label);
     const filename = `rapor_${new Date().toISOString().slice(0, 10)}`;
 
     try {
       if (type === "xlsx") {
         const XLSX = await import("xlsx");
-        const ws = XLSX.utils.aoa_to_sheet([hdr, ...data]);
+
+        // Tipli veri: sayılar number, tarihler Date, diğerleri string
+        const typedRows = sortedRows.map(r =>
+          activeCols.map(c => toExportVal(c.id, r[c.id]))
+        );
+
+        const ws = XLSX.utils.aoa_to_sheet([hdr, ...typedRows], { cellDates: true });
+
+        // Tarih kolonlarına "DD.MM.YYYY" hücre formatı uygula
+        activeCols.forEach((col, ci) => {
+          if (!DATE_COLS.has(col.id)) return;
+          const colLetter = XLSX.utils.encode_col(ci);
+          for (let ri = 1; ri <= sortedRows.length; ri++) {
+            const addr = `${colLetter}${ri + 1}`;
+            if (ws[addr]) ws[addr].z = "DD.MM.YYYY";
+          }
+        });
+
         ws["!cols"] = hdr.map(() => ({ wch: 18 }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Rapor");
+
         if (isNative()) {
           const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
           const fn = filename + ".xlsx";
@@ -378,9 +424,23 @@ export default function ReportPage({
           toast?.("Excel indirildi", "var(--ok)");
         }
       } else {
-        const csv = [hdr, ...data]
-          .map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+        // CSV: sayılar tırnaksız, diğerleri tırnaklı (Excel doğru tipte açar)
+        const csvRows = sortedRows.map(r =>
+          activeCols.map(c => {
+            const val = toExportVal(c.id, r[c.id]);
+            if (typeof val === "number") return val;           // tırnaksız sayı
+            if (val instanceof Date) {
+              // "DD.MM.YYYY" string olarak yaz
+              const pad = n => String(n).padStart(2, "0");
+              return `"${pad(val.getUTCDate())}.${pad(val.getUTCMonth()+1)}.${val.getUTCFullYear()}"`;
+            }
+            return `"${String(val ?? "").replace(/"/g, '""')}"`;
+          })
+        );
+        const csv = [hdr.map(h => `"${h}"`), ...csvRows]
+          .map(r => r.join(","))
           .join("\n");
+
         if (isNative()) {
           const fn = filename + ".csv";
           await Filesystem.writeFile({ path: fn, data: "\uFEFF" + csv, directory: Directory.Cache, encoding: Encoding.UTF8 });
