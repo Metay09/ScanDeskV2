@@ -63,7 +63,7 @@ ScanDesk, sanayi ortamlarında vardiya bazlı barkod tarama ve envanter takibi i
 | Vardiya yönetimi | 3 sabit vardiya: 12-8, 8-4, 4-12 |
 | Çoklu kullanıcı | Admin / normal kullanıcı rolleri |
 | Dinamik alanlar | Kullanıcı tanımlı özel alanlar (JSONB) |
-| Müşteri/açıklama | Seçmeli liste, admin yönetebilir |
+| Müşteri/açıklama | Seçmeli liste, admin veya kullanıcıya özel |
 | Vardiya devir | Bir önceki vardiyadan kayıt devralma |
 | Excel/CSV export | Tüm kayıtlar veya filtrelenmiş |
 | Excel/CSV import | Barkod listesi toplu yükleme |
@@ -132,26 +132,6 @@ Dinamik alanlar `custom_fields JSONB` kolonunda tutulur.
 - Java 21, Node 20 kullanılır.
 
 ---
-
-## 8. Güvenlik Değerlendirmesi
-
-### Tespit Edilen Riskler
-
-| Risk | Önem | Konum |
-|------|------|-------|
-| Varsayılan admin şifresi `admin123` kaynak kodunda | **Yüksek** | `constants.js:2` |
-| Varsayılan API anahtarı kaynak kodunda sabit | **Yüksek** | `constants.js:6` |
-| Google Apps Script URL kaynak kodunda açık | **Orta** | `constants.js:7` |
-| Sunucu: SQL parametreleri doğru kullanılmış (injection yok) | ✅ Güvenli | `server/index.js` |
-| API key doğrulaması tüm route'larda mevcut | ✅ Güvenli | `server/index.js` |
-
-### Öneriler
-1. Varsayılan şifre ve API key'i `.env` üzerinden alın, kaynak koddan kaldırın.
-2. `DEFAULT_POSTGRES_KEY` production key olmamalı; kullanıcıya ilk kurulumda ayarlatın.
-3. `PBKDF2` şifre hash'leme zaten mevcut (`utils.js`) — tüm kullanıcı şifrelerinin hash'li saklandığından emin olun.
-
----
-
 ## 9. Bilinen Sorunlar ve Açık Konular
 
 | No | Sorun | Durum |
