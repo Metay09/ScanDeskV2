@@ -389,7 +389,8 @@ export default function ReportPage({
 
     try {
       if (type === "xlsx") {
-        const XLSX = await import("xlsx");
+        // xlsx-js-style: SheetJS uyumlu, hücre stil yazma desteğiyle
+        const XLSX = await import("xlsx-js-style");
 
         // Tipli veri: sayılar number, tarihler Date, diğerleri string
         const typedRows = sortedRows.map(r =>
@@ -408,7 +409,28 @@ export default function ReportPage({
           }
         });
 
-        ws["!cols"] = hdr.map(() => ({ wch: 18 }));
+        // Başlık satırı stili: lacivert zemin + beyaz kalın yazı
+        const HEADER_STYLE = {
+          fill: { fgColor: { rgb: "1F3864" } },
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+          alignment: { horizontal: "center", vertical: "center" },
+        };
+        hdr.forEach((_, ci) => {
+          const addr = XLSX.utils.encode_cell({ r: 0, c: ci });
+          if (ws[addr]) ws[addr].s = HEADER_STYLE;
+        });
+
+        // Autofit: içerik uzunluğuna göre sütun genişliği
+        ws["!cols"] = activeCols.map(col => {
+          const headerLen = col.label.length;
+          const dataLen   = sortedRows.reduce((max, r) =>
+            Math.max(max, String(r[col.id] ?? "").length), 0);
+          return { wch: Math.min(Math.max(headerLen, dataLen) + 2, 60) };
+        });
+
+        // Başlık satırı yüksekliği
+        ws["!rows"] = [{ hpt: 20 }];
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Rapor");
 
