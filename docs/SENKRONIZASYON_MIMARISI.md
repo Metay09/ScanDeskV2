@@ -293,12 +293,14 @@ Kuyrukta bekleyen tüm işlemler sessizce işlenir
 ```
 App formatı (camelCase)         PostgreSQL (snake_case)
 ─────────────────────────────────────────────────────
+shiftDate           ←──────────→  shift_date
 syncStatus          ←──────────→  sync_status
 syncError           ←──────────→  sync_error
-recordId            ←──────────→  record_id
-scannedBy           ←──────────→  scanned_by
+scanned_by          ←──────────→  scanned_by
+scanned_by_username ←──────────→  scanned_by_username
 sourceRecordId      ←──────────→  source_record_id
 updatedAt           ←──────────→  updated_at
+customFields        ←──────────→  custom_fields (JSONB)
 
 toDbPayload()   → App → PostgreSQL
 fromDbPayload() → PostgreSQL → App

@@ -37,6 +37,7 @@ CREATE TABLE taramalar (
 
   -- Shift and organization
   shift TEXT NOT NULL,
+  shift_date TEXT DEFAULT '',
   customer TEXT DEFAULT '',
   aciklama TEXT DEFAULT '',
 
@@ -70,15 +71,14 @@ COMMENT ON COLUMN taramalar.id IS 'Unique identifier (UUID)';
 COMMENT ON COLUMN taramalar.barcode IS 'Scanned barcode value';
 COMMENT ON COLUMN taramalar.timestamp IS 'Exact time of scan';
 COMMENT ON COLUMN taramalar.shift IS 'Shift identifier: 12-8, 8-4, or 4-12';
-COMMENT ON COLUMN taramalar.shift_date IS 'Date associated with the shift (business date)';
+COMMENT ON COLUMN taramalar.shift_date IS 'Calendar date of the shift (YYYY-MM-DD)';
 COMMENT ON COLUMN taramalar.customer IS 'Customer name/identifier';
 COMMENT ON COLUMN taramalar.scanned_by IS 'Full name of user who scanned';
 COMMENT ON COLUMN taramalar.scanned_by_username IS 'Username of scanner';
-COMMENT ON COLUMN taramalar.synced IS 'Whether record has been synced to external systems';
 COMMENT ON COLUMN taramalar.sync_status IS 'Current sync status: pending, synced, or failed';
 COMMENT ON COLUMN taramalar.sync_error IS 'Error message if sync failed';
-COMMENT ON COLUMN taramalar.source IS 'How the record was created: scan, import, or inherit';
-COMMENT ON COLUMN taramalar.inherited_from_shift IS 'Source shift if record was inherited';
+COMMENT ON COLUMN taramalar.source IS 'How the record was created: scan, import, or shift_takeover';
+COMMENT ON COLUMN taramalar.source_record_id IS 'Original record ID if created via shift takeover';
 COMMENT ON COLUMN taramalar.custom_fields IS 'Dynamic user-defined fields stored as JSON';
 ```
 
@@ -211,123 +211,44 @@ COMMENT ON COLUMN field_definitions.locked IS 'If true, field cannot be deleted 
 
 ### From Application to Database
 
-When sending data from the application to PostgreSQL:
+Dönüşüm `src/services/recordModel.js` içindeki `toDbPayload()` fonksiyonu tarafından otomatik yapılır. Uygulama modeli (camelCase) → DB modeli (snake_case):
 
 ```javascript
-// Application model (what's in memory)
+// Uygulama modeli (camelCase)
 const appRecord = {
   id: "uuid",
   barcode: "8691234567890",
   timestamp: "2026-03-10T10:15:00Z",
-  date: "2026-03-10",
-  time: "13:15",
   shift: "8-4",
   shiftDate: "2026-03-10",
   customer: "ABC",
+  aciklama: "kontrol edildi",
   scanned_by: "Metay",
   scanned_by_username: "metay",
-  synced: false,
   syncStatus: "pending",
   syncError: "",
   source: "scan",
-  inheritedFromShift: "",
-  createdAt: "2026-03-10T10:15:00Z",
+  sourceRecordId: "",
   updatedAt: "2026-03-10T10:15:00Z",
-  customFields: {
-    qty: 12,
-    note: "kontrol edildi",
-    raf: "A-12"
-  }
+  customFields: { qty: 12, raf: "A-12" }
 };
 
-// Convert to database payload
+// DB payload — toDbPayload(appRecord) çıktısı
 const dbPayload = {
-  id: appRecord.id,
-  barcode: appRecord.barcode,
-  timestamp: appRecord.timestamp,
-  date: appRecord.date,
-  time: appRecord.time,
-  shift: appRecord.shift,
-  shift_date: appRecord.shiftDate,  // Note: camelCase → snake_case
-  customer: appRecord.customer,
-  scanned_by: appRecord.scanned_by,
-  scanned_by_username: appRecord.scanned_by_username,
-  synced: appRecord.synced,
-  sync_status: appRecord.syncStatus,
-  sync_error: appRecord.syncError,
-  source: appRecord.source,
-  inherited_from_shift: appRecord.inheritedFromShift,
-  created_at: appRecord.createdAt,
-  updated_at: appRecord.updatedAt,
-  custom_fields: appRecord.customFields  // JSONB column
+  id, barcode, timestamp,
+  shift, shift_date,          // shiftDate → shift_date
+  customer, aciklama,
+  scanned_by, scanned_by_username,
+  sync_status, sync_error,    // syncStatus → sync_status
+  source, source_record_id,   // sourceRecordId → source_record_id
+  updated_at,                 // updatedAt → updated_at
+  custom_fields               // customFields → custom_fields (JSONB)
 };
-
-// INSERT statement
-await db.query(
-  `INSERT INTO taramalar (
-    id, barcode, timestamp, date, time, shift, shift_date,
-    customer, scanned_by, scanned_by_username, synced,
-    sync_status, sync_error, source, inherited_from_shift,
-    created_at, updated_at, custom_fields
-  ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-  )`,
-  [
-    dbPayload.id,
-    dbPayload.barcode,
-    dbPayload.timestamp,
-    dbPayload.date,
-    dbPayload.time,
-    dbPayload.shift,
-    dbPayload.shift_date,
-    dbPayload.customer,
-    dbPayload.scanned_by,
-    dbPayload.scanned_by_username,
-    dbPayload.synced,
-    dbPayload.sync_status,
-    dbPayload.sync_error,
-    dbPayload.source,
-    dbPayload.inherited_from_shift,
-    dbPayload.created_at,
-    dbPayload.updated_at,
-    JSON.stringify(dbPayload.custom_fields)
-  ]
-);
 ```
 
 ### From Database to Application
 
-```javascript
-// Query from database
-const result = await db.query(`
-  SELECT * FROM taramalar
-  WHERE shift_date = $1 AND shift = $2
-  ORDER BY timestamp DESC
-`, [date, shift]);
-
-// Convert database row to application model
-const dbRecord = result.rows[0];
-const appRecord = {
-  id: dbRecord.id,
-  barcode: dbRecord.barcode,
-  timestamp: dbRecord.timestamp,
-  date: dbRecord.date,
-  time: dbRecord.time,
-  shift: dbRecord.shift,
-  shiftDate: dbRecord.shift_date,  // snake_case → camelCase
-  customer: dbRecord.customer,
-  scanned_by: dbRecord.scanned_by,
-  scanned_by_username: dbRecord.scanned_by_username,
-  synced: dbRecord.synced,
-  syncStatus: dbRecord.sync_status,
-  syncError: dbRecord.sync_error,
-  source: dbRecord.source,
-  inheritedFromShift: dbRecord.inherited_from_shift,
-  createdAt: dbRecord.created_at,
-  updatedAt: dbRecord.updated_at,
-  customFields: dbRecord.custom_fields  // Already parsed as object by pg driver
-};
-```
+`fromDbPayload()` fonksiyonu DB satırını uygulama modeline çevirir (snake_case → camelCase).
 
 ## Query Examples
 
@@ -545,43 +466,29 @@ console.log(JSON.stringify(state.records));
 ```javascript
 // Node.js script to import to PostgreSQL
 const { Pool } = require('pg');
+const { toDbPayload } = require('./src/services/recordModel');
 const pool = new Pool({ connectionString: 'postgresql://...' });
 
 const records = require('./exported_records.json');
 
 for (const record of records) {
-  const dbPayload = {
-    id: record.id,
-    barcode: record.barcode,
-    timestamp: record.timestamp,
-    date: record.date,
-    time: record.time,
-    shift: record.shift,
-    shift_date: record.shiftDate,
-    customer: record.customer || '',
-    scanned_by: record.scanned_by,
-    scanned_by_username: record.scanned_by_username,
-    synced: record.synced || false,
-    sync_status: record.syncStatus || 'pending',
-    sync_error: record.syncError || '',
-    source: record.source || 'scan',
-    inherited_from_shift: record.inheritedFromShift || '',
-    created_at: record.createdAt || record.timestamp,
-    updated_at: record.updatedAt || record.timestamp,
-    custom_fields: record.customFields || {}
-  };
-
+  const db = toDbPayload(record);
   await pool.query(`
     INSERT INTO taramalar (
-      id, barcode, timestamp, date, time, shift, shift_date,
-      customer, scanned_by, scanned_by_username, synced,
-      sync_status, sync_error, source, inherited_from_shift,
-      created_at, updated_at, custom_fields
+      id, barcode, timestamp, shift, shift_date,
+      customer, aciklama, scanned_by, scanned_by_username,
+      sync_status, sync_error, source, source_record_id,
+      updated_at, custom_fields
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
     )
     ON CONFLICT (id) DO NOTHING
-  `, Object.values(dbPayload));
+  `, [
+    db.id, db.barcode, db.timestamp, db.shift, db.shift_date,
+    db.customer, db.aciklama, db.scanned_by, db.scanned_by_username,
+    db.sync_status, db.sync_error, db.source, db.source_record_id,
+    db.updated_at, JSON.stringify(db.custom_fields)
+  ]);
 }
 ```
 

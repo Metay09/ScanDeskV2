@@ -86,8 +86,8 @@ ScanDesk, sanayi ortamlarında vardiya bazlı barkod tarama ve envanter takibi i
   shiftDate: "2026-03-14",
   customer: "ABC Ltd.",
   aciklama: "kontrol edildi",
-  scannedBy: "Ad Soyad",
-  scannedByUsername: "username",
+  scanned_by: "Ad Soyad",
+  scanned_by_username: "username",
   syncStatus: "synced",            // "pending" | "synced" | "failed"
   syncError: "",
   source: "scan",                  // "scan" | "import" | "shift_takeover"
@@ -111,6 +111,7 @@ Dinamik alanlar `custom_fields JSONB` kolonunda tutulur.
 | `recordModel.js` | Kayıt normalizasyonu, migrasyon, camelCase ↔ snake_case dönüşümü |
 | `integrations.js` | PostgreSQL API ve Google Sheets HTTP çağrıları |
 | `syncQueue.js` | Başarısız sync işlemleri için offline kuyruk (saf fonksiyonlar) |
+| `referenceTable.js` | Referans tablo (palet/lot) yükleme, sorgulama ve sunucu senkronizasyonu |
 
 ---
 
@@ -138,9 +139,7 @@ Dinamik alanlar `custom_fields JSONB` kolonunda tutulur.
 |----|-------|-------|
 | 1 | `SelectInput.jsx` hiçbir yerde kullanılmıyor | Açık — kaldırılabilir veya entegre edilebilir |
 | 2 | Google Sheets `no-cors` modu: sunucu hatası tespit edilemiyor | Tasarım kısıtı — dokümante edilmiş |
-| 3 | `shift_date` ve `inherited_from_shift` kolonları schema'da comment'te var ama tabloda yok | Açık — `server/init.sql` güncellenmeli |
-| 4 | `App.jsx` 1000+ satır — state çok büyük, bölünebilir | Teknik borç |
-| 5 | `handleEdit` → `syncRecordToSheets` kullanıyor ✅ | Çözüldü |
+| 3 | `App.jsx` 1000+ satır — state çok büyük, custom hook'lara bölünebilir | Teknik borç |
 
 ---
 

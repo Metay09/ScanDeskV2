@@ -23,7 +23,7 @@ Kayıt formatlarını dönüştürür. Uygulama modeli (camelCase, customFields)
 
 **Sabit sistem alanları (`FIXED_FIELDS`):**
 ```
-id, barcode, timestamp, shift, customer, aciklama,
+id, barcode, timestamp, shift, shiftDate, customer, aciklama,
 scanned_by, scanned_by_username, syncStatus, syncError,
 source, sourceRecordId, updatedAt
 ```
@@ -36,6 +36,13 @@ Dinamik kullanıcı alanları `customFields: {}` objesi içinde tutulur.
 - `getDynamicFieldValue(record, fieldId)` — `customFields` önce, root level fallback.
 - `setDynamicFieldValue(record, fieldId, value)` — `customFields` içine yazar.
 - `migrateRecords(records, fields)` — Toplu normalizasyon.
+
+### `referenceTable.js`
+Referans tablo servisi. Excel'den yüklenen palet/lot verilerini localStorage'da saklar ve sorgular.
+- `loadReferenceTable()` / `saveReferenceTable()` — kalıcılık
+- `lotToDate(lot)` — lot numarasından üretim tarihi hesapla
+- `queryRefTable(table, barcode)` — barkod ile palet kaydı bul
+- Sunucu senkronizasyonu: `fetchServerRefTable(cfg)` ile merkezi tablo çekilebilir
 
 ### `integrations.js`
 Dış sistemlerle iletişim. İki entegrasyon tipi: `postgres_api` ve `gsheets`.
@@ -52,7 +59,7 @@ Dış sistemlerle iletişim. İki entegrasyon tipi: `postgres_api` ve `gsheets`.
 - `sheetsDeleteBulk(cfg, ids)` — Ardışık sheetsDelete çağrısı.
 - `syncRecordToSheets(cfg, record, fields)` — Standart header + satır yapısıyla sheetsUpdate çağırır. **Tüm senkronizasyon noktaları bu fonksiyonu kullanmalı** (sütun tutarlılığı için).
 
-> **Açık konu:** `handleEdit` (App.jsx) hâlâ `sheetsUpdate`'i manuel header ile çağırıyor; `syncRecordToSheets` ile birleştirilmeli.
+> Tüm senkronizasyon noktaları `syncRecordToSheets` kullanır (sütun tutarlılığı için).
 
 ### `syncQueue.js`
 PostgreSQL sync başarısız olduğunda işlemleri kuyruğa alır. Saf fonksiyonlar, state dışında bağımsız çalışır.
@@ -72,6 +79,7 @@ PostgreSQL sync başarısız olduğunda işlemleri kuyruğa alır. Saf fonksiyon
   barcode: "8691234567890",
   timestamp: "2026-03-14T10:15:00.000Z",
   shift: "8-4",             // "12-8" | "8-4" | "4-12"
+  shiftDate: "2026-03-14",  // vardiya takvim tarihi
   customer: "ABC Ltd.",
   aciklama: "kontrol edildi",
   scanned_by: "Kullanıcı Adı",
@@ -156,10 +164,9 @@ Tablo adı: `taramalar`. Detaylar için `POSTGRESQL_SCHEMA.md`.
 
 | # | Konu | Öncelik |
 |---|------|---------|
-| 1 | `handleEdit` Sheets sütun sırası `syncRecordToSheets` ile birleştirilmeli | Orta |
-| 2 | `sheetsDeleteBulk` sıralı çalışıyor; Apps Script toplu silme desteklerse paralel yapılabilir | Düşük |
-| 3 | Back button listener her `page` değişiminde yeniden kaydoluyor | Düşük |
-| 4 | Tema `localStorage`'a direkt yazılıyor; diğer state Capacitor Preferences üzerinden gidiyor | Düşük |
+| 1 | `sheetsDeleteBulk` sıralı çalışıyor; Apps Script toplu silme desteklerse paralel yapılabilir | Düşük |
+| 2 | Tema `localStorage`'a direkt yazılıyor; diğer state Capacitor Preferences üzerinden gidiyor | Düşük |
+| 3 | `App.jsx` 1000+ satır — state çok büyük, custom hook'lara bölünebilir | Teknik borç |
 
 ## G. KAPANAN / ÇÖZÜLEN KONULAR
 
@@ -168,3 +175,5 @@ Tablo adı: `taramalar`. Detaylar için `POSTGRESQL_SCHEMA.md`.
 | `handleDelete` ve `handleEdit` `useCallback` ile sarılmamış | Her ikisi de `useCallback` ile sarıldı |
 | Veriler/Son Okutmalar sayfasında düzenleme sonrası scroll en üste gidiyordu | `scroll-area` ref + `useLayoutEffect` ile edit öncesi scroll pozisyonu kaydedilip render sonrası geri yükleniyor |
 | `src/components/` altındaki tüm bileşenler tek düzey yığılıydı | `pages/`, `modals/`, `ui/`, `shared/` alt klasörleriyle yeniden yapılandırıldı |
+| `handleEdit` Sheets sütun sırası tutarsızlığı | `syncRecordToSheets` fonksiyonu tüm sync noktalarında kullanılıyor |
+| Vardiya devralma sonrası kayıtlar görünmüyordu | `copyFromShift`'te `shiftDate: todayStr` açıkça yazılıyor |
