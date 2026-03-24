@@ -25,6 +25,35 @@ const BASE_COLS = [
   { id: "kullanici",  label: "Kullanıcı",          fixed: false },
 ];
 
+// Export için kolon tipleri
+const NUM_COLS  = new Set(["miktar", "koliAdet"]);
+const DATE_COLS = new Set(["tarih", "skt", "tarihLT"]);
+
+/** "DD.MM.YYYY" → JS Date (UTC gece yarısı). Hatalıysa null döner. */
+function parseDDMMYYYY(s) {
+  if (!s || typeof s !== "string") return null;
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Ham string değeri export için uygun tipe çevirir.
+ * XLSX'te Date/number olarak kalır; CSV'de string'e döner.
+ */
+function toExportVal(colId, raw) {
+  if (raw === "" || raw == null) return "";
+  if (NUM_COLS.has(colId)) {
+    const n = parseFloat(raw);
+    return isNaN(n) ? raw : n;
+  }
+  if (DATE_COLS.has(colId)) {
+    return parseDDMMYYYY(raw) ?? raw;
+  }
+  return raw;
+}
+
 // Varsayılan gizli kolonlar
 const HIDDEN_BY_DEFAULT = new Set(["skt", "aciklama"]);
 // Veri varsa otomatik gösterilen kolonlar (başlangıçta gizli)
@@ -77,6 +106,9 @@ export default function ReportPage({
   );
   const [colFilters, setColFilters]   = useState({});
   const [openFilter, setOpenFilter]   = useState(null);
+  const [filterSearch, setFilterSearch] = useState("");
+  const [sortCol, setSortCol]         = useState(null);
+  const [sortDir, setSortDir]         = useState("asc");
 
   // ── Admin record filtreleri ──────────────────────────────────────────────────
   const [selectedDate,  setSelectedDate]  = useState(() => fmtDate());
@@ -190,6 +222,9 @@ export default function ReportPage({
     return () => el?.removeEventListener("scroll", close);
   }, [openFilter]);
 
+  // Filtre popup açılınca arama kutusunu sıfırla
+  useEffect(() => { setFilterSearch(""); }, [openFilter]);
+
   // ── Referans tabloyla birleştir ─────────────────────────────────────────────
   const tableRows = useMemo(() => {
     return baseRecords.map(record => {
@@ -229,11 +264,22 @@ export default function ReportPage({
     );
   }, [tableRows, colFilters]);
 
+  // ── Sıralama ────────────────────────────────────────────────────────────────
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      const va = String(a[sortCol] ?? "");
+      const vb = String(b[sortCol] ?? "");
+      const cmp = va.localeCompare(vb, "tr", { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filteredRows, sortCol, sortDir]);
+
   // ── Toplamlar ───────────────────────────────────────────────────────────────
   const totals = useMemo(() => ({
-    miktar:   filteredRows.reduce((s, r) => s + (parseFloat(r.miktar)  || 0), 0),
-    koliAdet: filteredRows.reduce((s, r) => s + (parseInt(r.koliAdet)  || 0), 0),
-  }), [filteredRows]);
+    miktar:   sortedRows.reduce((s, r) => s + (parseFloat(r.miktar)  || 0), 0),
+    koliAdet: sortedRows.reduce((s, r) => s + (parseInt(r.koliAdet)  || 0), 0),
+  }), [sortedRows]);
 
   const activeCols = useMemo(() => allCols.filter(c => visibleCols[c.id]), [allCols, visibleCols]);
 
@@ -312,33 +358,82 @@ export default function ReportPage({
 
   const toggleFilterVal = (colId, val) => {
     setColFilters(prev => {
-      const cur = new Set(prev[colId] || []);
+      // İlk kez filtre uygulanıyorsa: tüm değerleri ekle, tıklananı çıkar
+      if (!prev[colId]) {
+        const all = new Set(getColUniqueVals(colId));
+        all.delete(val);
+        return { ...prev, [colId]: all };
+      }
+      const cur = new Set(prev[colId]);
       if (cur.has(val)) cur.delete(val); else cur.add(val);
+      // Hiçbiri kalmadıysa veya hepsi seçildiyse filtreyi kaldır
+      const allVals = getColUniqueVals(colId);
+      if (cur.size === 0 || cur.size >= allVals.length) {
+        const n = { ...prev }; delete n[colId]; return n;
+      }
       return { ...prev, [colId]: cur };
     });
   };
 
   const clearColFilter   = (colId) => setColFilters(prev => { const n = { ...prev }; delete n[colId]; return n; });
-  const selectAllFilter  = (colId) => setColFilters(prev => ({ ...prev, [colId]: new Set(getColUniqueVals(colId)) }));
   const hasFilter        = (colId) => colFilters[colId]?.size > 0;
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const handleExport = async (type) => {
-    if (!filteredRows.length) {
+    if (!sortedRows.length) {
       toast?.("Dışa aktarılacak kayıt yok", "var(--acc)");
       return;
     }
-    const hdr  = activeCols.map(c => c.label);
-    const data = filteredRows.map(r => activeCols.map(c => String(r[c.id] ?? "")));
+    const hdr      = activeCols.map(c => c.label);
     const filename = `rapor_${new Date().toISOString().slice(0, 10)}`;
 
     try {
       if (type === "xlsx") {
-        const XLSX = await import("xlsx");
-        const ws = XLSX.utils.aoa_to_sheet([hdr, ...data]);
-        ws["!cols"] = hdr.map(() => ({ wch: 18 }));
+        // xlsx-js-style: SheetJS uyumlu, hücre stil yazma desteğiyle
+        const XLSX = await import("xlsx-js-style");
+
+        // Tipli veri: sayılar number, tarihler Date, diğerleri string
+        const typedRows = sortedRows.map(r =>
+          activeCols.map(c => toExportVal(c.id, r[c.id]))
+        );
+
+        const ws = XLSX.utils.aoa_to_sheet([hdr, ...typedRows], { cellDates: true });
+
+        // Tarih kolonlarına "DD.MM.YYYY" hücre formatı uygula
+        activeCols.forEach((col, ci) => {
+          if (!DATE_COLS.has(col.id)) return;
+          const colLetter = XLSX.utils.encode_col(ci);
+          for (let ri = 1; ri <= sortedRows.length; ri++) {
+            const addr = `${colLetter}${ri + 1}`;
+            if (ws[addr]) ws[addr].z = "DD.MM.YYYY";
+          }
+        });
+
+        // Başlık satırı stili: lacivert zemin + beyaz kalın yazı
+        const HEADER_STYLE = {
+          fill: { fgColor: { rgb: "1F3864" } },
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+          alignment: { horizontal: "center", vertical: "center" },
+        };
+        hdr.forEach((_, ci) => {
+          const addr = XLSX.utils.encode_cell({ r: 0, c: ci });
+          if (ws[addr]) ws[addr].s = HEADER_STYLE;
+        });
+
+        // Autofit: içerik uzunluğuna göre sütun genişliği
+        ws["!cols"] = activeCols.map(col => {
+          const headerLen = col.label.length;
+          const dataLen   = sortedRows.reduce((max, r) =>
+            Math.max(max, String(r[col.id] ?? "").length), 0);
+          return { wch: Math.min(Math.max(headerLen, dataLen) + 2, 60) };
+        });
+
+        // Başlık satırı yüksekliği
+        ws["!rows"] = [{ hpt: 20 }];
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Rapor");
+
         if (isNative()) {
           const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
           const fn = filename + ".xlsx";
@@ -351,9 +446,23 @@ export default function ReportPage({
           toast?.("Excel indirildi", "var(--ok)");
         }
       } else {
-        const csv = [hdr, ...data]
-          .map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+        // CSV: sayılar tırnaksız, diğerleri tırnaklı (Excel doğru tipte açar)
+        const csvRows = sortedRows.map(r =>
+          activeCols.map(c => {
+            const val = toExportVal(c.id, r[c.id]);
+            if (typeof val === "number") return val;           // tırnaksız sayı
+            if (val instanceof Date) {
+              // "DD.MM.YYYY" string olarak yaz
+              const pad = n => String(n).padStart(2, "0");
+              return `"${pad(val.getUTCDate())}.${pad(val.getUTCMonth()+1)}.${val.getUTCFullYear()}"`;
+            }
+            return `"${String(val ?? "").replace(/"/g, '""')}"`;
+          })
+        );
+        const csv = [hdr.map(h => `"${h}"`), ...csvRows]
+          .map(r => r.join(","))
           .join("\n");
+
         if (isNative()) {
           const fn = filename + ".csv";
           await Filesystem.writeFile({ path: fn, data: "\uFEFF" + csv, directory: Directory.Cache, encoding: Encoding.UTF8 });
@@ -563,7 +672,11 @@ export default function ReportPage({
                           }}
                         >
                           {col.label}
-                          <span className="rp-th-arrow">{active ? "▲" : "▼"}</span>
+                          <span className="rp-th-arrow">
+                            {sortCol === col.id
+                              ? (sortDir === "asc" ? "↑" : "↓")
+                              : active ? "▲" : "▼"}
+                          </span>
                         </button>
 
                         {openFilter === col.id && (
@@ -572,16 +685,40 @@ export default function ReportPage({
                             style={filterPopupPos ? { top: filterPopupPos.top, left: filterPopupPos.left } : undefined}
                             onClick={e => e.stopPropagation()}
                           >
-                            <div className="rp-filter-actions">
-                              <button className="btn btn-sm btn-ghost" onClick={() => selectAllFilter(col.id)}>Tümü</button>
-                              <button className="btn btn-sm btn-ghost" onClick={() => clearColFilter(col.id)}>Temizle</button>
+                            {/* Sıralama butonları */}
+                            <div className="rp-filter-sort">
+                              <button onClick={() => { setSortCol(col.id); setSortDir("asc");  setOpenFilter(null); }}>
+                                ↑ A → Z Sırala
+                              </button>
+                              <button onClick={() => { setSortCol(col.id); setSortDir("desc"); setOpenFilter(null); }}>
+                                ↓ Z → A Sırala
+                              </button>
                             </div>
+                            {/* Arama kutusu */}
+                            <input
+                              className="rp-filter-search"
+                              placeholder="Ara..."
+                              value={filterSearch}
+                              onChange={e => setFilterSearch(e.target.value)}
+                              autoFocus
+                            />
                             <div className="rp-filter-list">
-                              {getColUniqueVals(col.id).map(val => (
+                              {/* Tümünü Seç */}
+                              <label className="rp-filter-item rp-filter-item--all">
+                                <input
+                                  type="checkbox"
+                                  checked={!colFilters[col.id]}
+                                  onChange={() => clearColFilter(col.id)}
+                                />
+                                <span>(Tümünü Seç)</span>
+                              </label>
+                              {getColUniqueVals(col.id)
+                                .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
+                                .map(val => (
                                 <label key={val} className="rp-filter-item">
                                   <input
                                     type="checkbox"
-                                    checked={colFilters[col.id]?.has(val) ?? false}
+                                    checked={!colFilters[col.id] || colFilters[col.id].has(val)}
                                     onChange={() => toggleFilterVal(col.id, val)}
                                   />
                                   <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
@@ -596,14 +733,14 @@ export default function ReportPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0 ? (
+                {sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={activeCols.length} style={{ textAlign: "center", padding: "24px", color: "var(--tx2)" }}>
                       Kayıt bulunamadı
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, i) => (
+                  sortedRows.map((row, i) => (
                     <tr key={i} className={row.matched ? "" : "rp-row--unmatched"}>
                       {activeCols.map(col => (
                         <td key={col.id} className="rp-td">{row[col.id]}</td>
@@ -612,13 +749,13 @@ export default function ReportPage({
                   ))
                 )}
               </tbody>
-              {filteredRows.length > 0 && (
+              {sortedRows.length > 0 && (
                 <tfoot>
                   <tr className="rp-totals-row">
                     {activeCols.map(col => (
                       <td key={col.id} className="rp-td rp-td--total">
                         {col.id === "paletKodu"
-                          ? `${filteredRows.length} kayıt`
+                          ? `${sortedRows.length} kayıt`
                           : col.id === "miktar"
                             ? totals.miktar.toLocaleString("tr-TR", { maximumFractionDigits: 2 })
                             : col.id === "koliAdet"

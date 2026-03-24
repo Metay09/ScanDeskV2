@@ -94,7 +94,7 @@ export default function Login({ users, onLogin, onMigratePassword, logoutReason,
         </button>
         {integration?.postgresApi?.active && (
           <p style={{ marginTop: 14, fontSize: 11, color: "var(--tx2)", textAlign: "center", lineHeight: 1.5 }}>
-            {`Sunucu: ${integration.postgresApi.serverUrl} — admin dışı kullanıcılar sunucu bağlantısı gerektirir.`}
+            Sunucu bağlantısı gerektirir
           </p>
         )}
       </div>
