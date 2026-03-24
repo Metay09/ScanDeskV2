@@ -13,7 +13,7 @@ import ShiftTakeoverPrompt from "../modals/ShiftTakeoverPrompt";
 import FieldInput from "../shared/FieldInput";
 import DetailFormModal from "../modals/DetailFormModal";
 
-export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, aciklamalar, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue }) {
+export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records, lastSaved, customers, aciklamalar, isAdmin, user, integration, scanSettings, toast, shiftExpired = false, shiftTakeovers = {}, onShiftTakeover, addToSyncQueue, processSyncQueue }) {
   const customerList = getCustomerList(customers);
   const aciklamaList = getAciklamaList(aciklamalar);
   const normalizeCustomer = (val) => val === "-Boş-" ? "" : val;
@@ -400,10 +400,13 @@ export default function ScanPage({ fields, onSave, onEdit, onSyncUpdate, records
           });
       }
       if (integration.gsheets?.active) {
-        syncRecordToSheets(integration.gsheets, newRecord, fields)
-          .catch(() => addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets"));
+        addToSyncQueue?.("create", newRecord.id, { record: newRecord, fields }, "gsheets");
       }
     });
+
+    if (integration.gsheets?.active && toCopy.length > 0) {
+      processSyncQueue?.(true);
+    }
 
     setInheritModal(false);
 
