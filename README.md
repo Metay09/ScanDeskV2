@@ -3,8 +3,6 @@
 Barkod tarama ve envanter yönetim uygulaması. Gerçek zamanlı barkod okuma, çoklu kullanıcı desteği, müşteri/ürün yönetimi ve veri dışa aktarma özellikleri sunar.
 
 ## Özellikler
-
-- 📷 **Gerçek zamanlı barkod tarama** — Cihaz kamerası veya QR okuyucu ile
 - 👥 **Çoklu kullanıcı** — Admin ve kullanıcı rolleri
 - 🏢 **Müşteri yönetimi** — Özel veri alanları ile
 - ⏰ **Vardiya takibi** — Envanter operasyonları için
