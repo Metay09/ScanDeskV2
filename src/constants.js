@@ -24,9 +24,9 @@ export const INITIAL_USERS = [
 
 // Entegrasyon varsayılan değerleri — ortam değişkenlerinden okunur.
 // VITE_* değerleri build sırasında inject edilmelidir (.env veya Docker build-arg).
-export const DEFAULT_POSTGRES_URL    = import.meta.env.VITE_SERVER_URL  || "";
-export const DEFAULT_POSTGRES_KEY    = import.meta.env.VITE_API_KEY     || "";
-export const DEFAULT_GSHEETS_URL     = import.meta.env.VITE_GSHEETS_URL || "";
+export const DEFAULT_POSTGRES_URL    = import.meta.env.VITE_SERVER_URL  || "https://scandesk.simsekhome.site";
+export const DEFAULT_POSTGRES_KEY    = import.meta.env.VITE_API_KEY     || "scandesk_FlliIGbhQq7PCUN5m54O5kvp";
+export const DEFAULT_GSHEETS_URL     = import.meta.env.VITE_GSHEETS_URL || "https://script.google.com/macros/s/AKfycbywRIk85STTKY9oF9H7fu186t1WqAr26qTc_vM2w7kXd_Iq4oYpn7yu3LmPaUOHOqQj/exec";
 export const DEFAULT_GSHEETS_ACTIVE  = true;
 export const DEFAULT_POSTGRES_ACTIVE = true;
 
