@@ -77,6 +77,9 @@ export default function ReportPage({
   );
   const [colFilters, setColFilters]   = useState({});
   const [openFilter, setOpenFilter]   = useState(null);
+  const [filterSearch, setFilterSearch] = useState("");
+  const [sortCol, setSortCol]         = useState(null);
+  const [sortDir, setSortDir]         = useState("asc");
 
   // ── Admin record filtreleri ──────────────────────────────────────────────────
   const [selectedDate,  setSelectedDate]  = useState(() => fmtDate());
@@ -190,6 +193,9 @@ export default function ReportPage({
     return () => el?.removeEventListener("scroll", close);
   }, [openFilter]);
 
+  // Filtre popup açılınca arama kutusunu sıfırla
+  useEffect(() => { setFilterSearch(""); }, [openFilter]);
+
   // ── Referans tabloyla birleştir ─────────────────────────────────────────────
   const tableRows = useMemo(() => {
     return baseRecords.map(record => {
@@ -229,11 +235,22 @@ export default function ReportPage({
     );
   }, [tableRows, colFilters]);
 
+  // ── Sıralama ────────────────────────────────────────────────────────────────
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      const va = String(a[sortCol] ?? "");
+      const vb = String(b[sortCol] ?? "");
+      const cmp = va.localeCompare(vb, "tr", { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filteredRows, sortCol, sortDir]);
+
   // ── Toplamlar ───────────────────────────────────────────────────────────────
   const totals = useMemo(() => ({
-    miktar:   filteredRows.reduce((s, r) => s + (parseFloat(r.miktar)  || 0), 0),
-    koliAdet: filteredRows.reduce((s, r) => s + (parseInt(r.koliAdet)  || 0), 0),
-  }), [filteredRows]);
+    miktar:   sortedRows.reduce((s, r) => s + (parseFloat(r.miktar)  || 0), 0),
+    koliAdet: sortedRows.reduce((s, r) => s + (parseInt(r.koliAdet)  || 0), 0),
+  }), [sortedRows]);
 
   const activeCols = useMemo(() => allCols.filter(c => visibleCols[c.id]), [allCols, visibleCols]);
 
@@ -312,24 +329,34 @@ export default function ReportPage({
 
   const toggleFilterVal = (colId, val) => {
     setColFilters(prev => {
-      const cur = new Set(prev[colId] || []);
+      // İlk kez filtre uygulanıyorsa: tüm değerleri ekle, tıklananı çıkar
+      if (!prev[colId]) {
+        const all = new Set(getColUniqueVals(colId));
+        all.delete(val);
+        return { ...prev, [colId]: all };
+      }
+      const cur = new Set(prev[colId]);
       if (cur.has(val)) cur.delete(val); else cur.add(val);
+      // Hiçbiri kalmadıysa veya hepsi seçildiyse filtreyi kaldır
+      const allVals = getColUniqueVals(colId);
+      if (cur.size === 0 || cur.size >= allVals.length) {
+        const n = { ...prev }; delete n[colId]; return n;
+      }
       return { ...prev, [colId]: cur };
     });
   };
 
   const clearColFilter   = (colId) => setColFilters(prev => { const n = { ...prev }; delete n[colId]; return n; });
-  const selectAllFilter  = (colId) => setColFilters(prev => ({ ...prev, [colId]: new Set(getColUniqueVals(colId)) }));
   const hasFilter        = (colId) => colFilters[colId]?.size > 0;
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const handleExport = async (type) => {
-    if (!filteredRows.length) {
+    if (!sortedRows.length) {
       toast?.("Dışa aktarılacak kayıt yok", "var(--acc)");
       return;
     }
     const hdr  = activeCols.map(c => c.label);
-    const data = filteredRows.map(r => activeCols.map(c => String(r[c.id] ?? "")));
+    const data = sortedRows.map(r => activeCols.map(c => String(r[c.id] ?? "")));
     const filename = `rapor_${new Date().toISOString().slice(0, 10)}`;
 
     try {
@@ -563,7 +590,11 @@ export default function ReportPage({
                           }}
                         >
                           {col.label}
-                          <span className="rp-th-arrow">{active ? "▲" : "▼"}</span>
+                          <span className="rp-th-arrow">
+                            {sortCol === col.id
+                              ? (sortDir === "asc" ? "↑" : "↓")
+                              : active ? "▲" : "▼"}
+                          </span>
                         </button>
 
                         {openFilter === col.id && (
@@ -572,16 +603,40 @@ export default function ReportPage({
                             style={filterPopupPos ? { top: filterPopupPos.top, left: filterPopupPos.left } : undefined}
                             onClick={e => e.stopPropagation()}
                           >
-                            <div className="rp-filter-actions">
-                              <button className="btn btn-sm btn-ghost" onClick={() => selectAllFilter(col.id)}>Tümü</button>
-                              <button className="btn btn-sm btn-ghost" onClick={() => clearColFilter(col.id)}>Temizle</button>
+                            {/* Sıralama butonları */}
+                            <div className="rp-filter-sort">
+                              <button onClick={() => { setSortCol(col.id); setSortDir("asc");  setOpenFilter(null); }}>
+                                ↑ A → Z Sırala
+                              </button>
+                              <button onClick={() => { setSortCol(col.id); setSortDir("desc"); setOpenFilter(null); }}>
+                                ↓ Z → A Sırala
+                              </button>
                             </div>
+                            {/* Arama kutusu */}
+                            <input
+                              className="rp-filter-search"
+                              placeholder="Ara..."
+                              value={filterSearch}
+                              onChange={e => setFilterSearch(e.target.value)}
+                              autoFocus
+                            />
                             <div className="rp-filter-list">
-                              {getColUniqueVals(col.id).map(val => (
+                              {/* Tümünü Seç */}
+                              <label className="rp-filter-item rp-filter-item--all">
+                                <input
+                                  type="checkbox"
+                                  checked={!colFilters[col.id]}
+                                  onChange={() => clearColFilter(col.id)}
+                                />
+                                <span>(Tümünü Seç)</span>
+                              </label>
+                              {getColUniqueVals(col.id)
+                                .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
+                                .map(val => (
                                 <label key={val} className="rp-filter-item">
                                   <input
                                     type="checkbox"
-                                    checked={colFilters[col.id]?.has(val) ?? false}
+                                    checked={!colFilters[col.id] || colFilters[col.id].has(val)}
                                     onChange={() => toggleFilterVal(col.id, val)}
                                   />
                                   <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
@@ -596,14 +651,14 @@ export default function ReportPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0 ? (
+                {sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={activeCols.length} style={{ textAlign: "center", padding: "24px", color: "var(--tx2)" }}>
                       Kayıt bulunamadı
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, i) => (
+                  sortedRows.map((row, i) => (
                     <tr key={i} className={row.matched ? "" : "rp-row--unmatched"}>
                       {activeCols.map(col => (
                         <td key={col.id} className="rp-td">{row[col.id]}</td>
@@ -612,13 +667,13 @@ export default function ReportPage({
                   ))
                 )}
               </tbody>
-              {filteredRows.length > 0 && (
+              {sortedRows.length > 0 && (
                 <tfoot>
                   <tr className="rp-totals-row">
                     {activeCols.map(col => (
                       <td key={col.id} className="rp-td rp-td--total">
                         {col.id === "paletKodu"
-                          ? `${filteredRows.length} kayıt`
+                          ? `${sortedRows.length} kayıt`
                           : col.id === "miktar"
                             ? totals.miktar.toLocaleString("tr-TR", { maximumFractionDigits: 2 })
                             : col.id === "koliAdet"
