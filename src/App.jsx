@@ -773,8 +773,7 @@ export default function App() {
     }
 
     if (integration.gsheets?.active) {
-      syncRecordToSheets(integration.gsheets, rec, fields)
-        .catch(() => addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets"));
+      addToSyncQueue("update", rec.id, { record: rec, fields }, "gsheets");
     }
   }, [fields, addShiftDate, integration, toast, handleSyncUpdate, addToSyncQueue]);
 
