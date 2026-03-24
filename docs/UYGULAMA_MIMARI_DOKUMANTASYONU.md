@@ -81,6 +81,7 @@ scandesk-project/
 │   ├── index.css                  # Global styles, CSS variables
 │   ├── constants.js               # Initial data, config constants
 │   ├── utils.js                   # Pure functions (date, crypto, etc.)
+│   ├── logger.js                  # Geliştirme logları (prod'da sessiz)
 │   │
 │   ├── components/
 │   │   ├── pages/                 # Tam ekran sayfa bileşenleri
@@ -106,7 +107,7 @@ scandesk-project/
 │   │   │   ├── Toggle.jsx         # Toggle switch
 │   │   │   ├── ErrorBoundary.jsx  # React error boundary
 │   │   │   ├── PasswordInput.jsx  # Şifre input (göster/gizle)
-│   │   │   └── SelectInput.jsx    # Select dropdown
+│   │   │   └── SelectInput.jsx    # Select dropdown (şu an kullanılmıyor)
 │   │   │
 │   │   └── shared/                # Birden fazla sayfada kullanılan widget'lar
 │   │       ├── CustomerPicker.jsx # Müşteri seçimi widget
@@ -117,11 +118,16 @@ scandesk-project/
 │   │   ├── storage.js             # LocalStorage/Preferences abstraction
 │   │   ├── integrations.js        # PostgreSQL API & Google Sheets fonksiyonları
 │   │   ├── recordModel.js         # Kayıt normalizasyon ve DB dönüşüm katmanı
-│   │   └── syncQueue.js           # PostgreSQL offline sync kuyruğu (saf fonksiyonlar)
+│   │   ├── syncQueue.js           # PostgreSQL offline sync kuyruğu (saf fonksiyonlar)
+│   │   └── referenceTable.js      # Referans tablo (palet/lot) yükleme ve sorgulama
 │   │
 │   └── hooks/
 │       ├── useToast.js            # Toast notification hook
-│       └── useFormState.js        # Form state management hook
+│       ├── useFormState.js        # Form state management hook
+│       ├── useBackButton.js       # Android geri tuşu yönetimi
+│       ├── useSyncQueue.js        # Sync kuyruğu state + işlem hook'u
+│       ├── useServerSync.js       # SSE tabanlı gerçek zamanlı sunucu senkronizasyonu
+│       └── useShiftTimer.js       # Vardiya bitimi ve grace period geri sayımı
 │
 ├── docs/                          # Proje dokümantasyonu
 ├── capacitor.config.json          # Capacitor native configuration

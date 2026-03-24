@@ -22,16 +22,22 @@ src/
 ├── index.css
 ├── constants.js
 ├── utils.js
+├── logger.js               ← geliştirme logları (prod'da sessiz)
 │
 ├── services/
 │   ├── storage.js          ← platform detection (web/Android), dokunma
 │   ├── integrations.js     ← PostgreSQL + Google Sheets API
 │   ├── recordModel.js      ← kayıt normalizasyonu ve migrasyon
-│   └── syncQueue.js        ← çevrimdışı senkronizasyon kuyruğu
+│   ├── syncQueue.js        ← çevrimdışı senkronizasyon kuyruğu
+│   └── referenceTable.js   ← referans tablo (palet/lot) yükleme ve sorgulama
 │
 ├── hooks/
 │   ├── useToast.js
-│   └── useFormState.js
+│   ├── useFormState.js
+│   ├── useBackButton.js    ← Android geri tuşu yönetimi
+│   ├── useSyncQueue.js     ← senkronizasyon kuyruğu state + işlemleri
+│   ├── useServerSync.js    ← SSE tabanlı gerçek zamanlı sunucu senkronizasyonu
+│   └── useShiftTimer.js    ← vardiya bitimi ve grace period geri sayımı
 │
 └── components/
     ├── pages/
