@@ -321,6 +321,7 @@ label.lbl{display:block;font-size:11px;font-weight:700;color:var(--tx2);
   border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx);}
 .rp-filter-item:hover{background:var(--s3);}
 .rp-filter-item input{accent-color:var(--acc);cursor:pointer;}
+.rp-filter-item:has(input:checked){background:var(--acc2);color:var(--acc);font-weight:500;}
 .rp-filter-item--all{font-weight:600;border-bottom:1px solid var(--brd);margin-bottom:2px;padding-bottom:7px;border-radius:0;}
 
 /* Column picker */
@@ -333,6 +334,8 @@ label.lbl{display:block;font-size:11px;font-weight:700;color:var(--tx2);
 .rp-col-picker-item:hover{background:var(--s3);}
 .rp-col-picker-item input{accent-color:var(--acc);cursor:pointer;}
 .rp-col-picker-item input:disabled{opacity:.4;}
+.rp-col-picker-item:has(input:checked){background:var(--acc2);color:var(--acc);font-weight:600;}
+.rp-col-picker-item:has(input:checked:disabled){background:var(--s3);color:var(--tx2);font-weight:400;}
 
 /* Mapper modal */
 .rp-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);
