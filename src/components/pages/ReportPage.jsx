@@ -409,16 +409,27 @@ export default function ReportPage({
           }
         });
 
-        // Başlık satırı stili: lacivert zemin + beyaz kalın yazı
+        // Hücre stilleri: koyu gri başlık + ince gri kenarlık (tüm hücreler)
+        const CELL_BORDER = {
+          top:    { style: "thin", color: { rgb: "C0C0C0" } },
+          bottom: { style: "thin", color: { rgb: "C0C0C0" } },
+          left:   { style: "thin", color: { rgb: "C0C0C0" } },
+          right:  { style: "thin", color: { rgb: "C0C0C0" } },
+        };
         const HEADER_STYLE = {
-          fill: { fgColor: { rgb: "1F3864" } },
+          fill: { fgColor: { rgb: "595959" } },
           font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
           alignment: { horizontal: "center", vertical: "center" },
+          border: CELL_BORDER,
         };
-        hdr.forEach((_, ci) => {
-          const addr = XLSX.utils.encode_cell({ r: 0, c: ci });
-          if (ws[addr]) ws[addr].s = HEADER_STYLE;
-        });
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        for (let R = range.s.r; R <= range.e.r; R++) {
+          for (let C = range.s.c; C <= range.e.c; C++) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+            if (!ws[addr]) continue;
+            ws[addr].s = R === 0 ? HEADER_STYLE : { border: CELL_BORDER };
+          }
+        }
 
         // Autofit: içerik uzunluğuna göre sütun genişliği
         ws["!cols"] = activeCols.map(col => {
