@@ -20,6 +20,16 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const importRef = useRef(null);
   const toggleSel = (id) => setSel(p => toggleSetMember(p, id));
   const clearSel = () => setSel(new Set());
+  const selectShiftOption = (v, e) => {
+    e?.preventDefault?.();
+    setSelectedShift(v);
+    setShiftOpen(false);
+  };
+  const selectUserOption = (uname, e) => {
+    e?.preventDefault?.();
+    setSelectedUser(uname);
+    setUserOpen(false);
+  };
 
   const currentShiftDate = getShiftDate(undefined, currentShift);
 
@@ -381,10 +391,16 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
               {shiftOpen && (
                 <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 120, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
                   {[null, ...FIXED_SHIFTS.map(s => s.label)].map(v => (
-                    <div key={v ?? "__all"} onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
-                      style={{ padding: "10px 14px", cursor: "pointer", fontWeight: v === selectedShift ? 700 : 400, color: v === selectedShift ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                    <button
+                      key={v ?? "__all"}
+                      type="button"
+                      onPointerDown={(e) => selectShiftOption(v, e)}
+                      onTouchStart={(e) => selectShiftOption(v, e)}
+                      onClick={(e) => selectShiftOption(v, e)}
+                      style={{ padding: "10px 14px", cursor: "pointer", fontWeight: v === selectedShift ? 700 : 400, color: v === selectedShift ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)", width: "100%", textAlign: "left", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", touchAction: "manipulation", userSelect: "none", WebkitTapHighlightColor: "transparent", WebkitTouchCallout: "none" }}
+                    >
                       {v ?? "Tümü"}
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -406,10 +422,16 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
                     const uname = v?.username ?? null;
                     const label = v ? (v.name || v.username) : "Tümü";
                     return (
-                      <div key={uname ?? "__all"} onClick={() => { setSelectedUser(uname); setUserOpen(false); }}
-                        style={{ padding: "10px 14px", cursor: "pointer", fontWeight: uname === selectedUser ? 700 : 400, color: uname === selectedUser ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                      <button
+                        key={uname ?? "__all"}
+                        type="button"
+                        onPointerDown={(e) => selectUserOption(uname, e)}
+                        onTouchStart={(e) => selectUserOption(uname, e)}
+                        onClick={(e) => selectUserOption(uname, e)}
+                        style={{ padding: "10px 14px", cursor: "pointer", fontWeight: uname === selectedUser ? 700 : 400, color: uname === selectedUser ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)", width: "100%", textAlign: "left", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", touchAction: "manipulation", userSelect: "none", WebkitTapHighlightColor: "transparent", WebkitTouchCallout: "none" }}
+                      >
                         {label}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

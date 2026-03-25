@@ -47,13 +47,19 @@ export function addToQueue(queue, item) {
   const exists = queue.some(q =>
     q.recordId === item.recordId &&
     q.action === item.action &&
+    (q.integrationType || "postgres_api") === (item.integrationType || "postgres_api") &&
     q.status === "pending"
   );
 
   if (exists) {
     // Update existing item instead of adding duplicate
     return queue.map(q => {
-      if (q.recordId === item.recordId && q.action === item.action && q.status === "pending") {
+      if (
+        q.recordId === item.recordId &&
+        q.action === item.action &&
+        (q.integrationType || "postgres_api") === (item.integrationType || "postgres_api") &&
+        q.status === "pending"
+      ) {
         return { ...item, id: q.id, retryCount: q.retryCount };
       }
       return q;
