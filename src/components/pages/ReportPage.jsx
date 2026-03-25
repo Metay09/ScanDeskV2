@@ -119,6 +119,7 @@ export default function ReportPage({
 
   const fileRef         = useRef(null);
   const filterRefs      = useRef({});
+  const shiftRef        = useRef(null);
   const tarihLTChecked  = useRef(false);
 
   // ── Dinamik ekstra kolonlar (colMap'teki _extra_ alanlarından) ──────────────
@@ -205,10 +206,14 @@ export default function ReportPage({
         const picker = document.getElementById("rp-col-picker");
         if (picker && !picker.contains(e.target)) setShowColPicker(false);
       }
+      if (shiftOpen) {
+        const shift = shiftRef.current;
+        if (shift && !shift.contains(e.target)) setShiftOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [openFilter, showColPicker]);
+  }, [openFilter, showColPicker, shiftOpen]);
 
   // Sayfa kaydırıldığında filtre popup'ı kapat (position:fixed popup kayar)
   useEffect(() => {
@@ -548,7 +553,7 @@ export default function ReportPage({
                 onChange={e => setSelectedDate(e.target.value)}
                 className="shift-date"
               />
-              <div style={{ position: "relative" }}>
+              <div ref={shiftRef} style={{ position: "relative" }}>
                 <button
                   className={`btn btn-sm ${selectedShift ? "btn-info" : "btn-ghost"}`}
                   onClick={() => setShiftOpen(p => !p)}>
@@ -586,17 +591,18 @@ export default function ReportPage({
                   <div className="rp-col-picker-menu">
                     {allCols.map(c => {
                       const isChecked = !!visibleCols[c.id];
+                      const isDisabled = !!c.fixed;
                       return (
                         <label
                           key={c.id}
-                          className={`rp-col-picker-item ${isChecked ? "rp-col-picker-item--checked" : ""} ${c.fixed ? "rp-col-picker-item--disabled" : ""}`.trim()}
+                          className={`rp-col-picker-item ${isChecked && !isDisabled ? "rp-col-picker-item--checked" : ""} ${isDisabled ? "rp-col-picker-item--disabled" : ""}`.trim()}
                         >
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            disabled={c.fixed}
+                            disabled={isDisabled}
                             onChange={() => {
-                              if (c.fixed) return;
+                              if (isDisabled) return;
                               setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
                             }}
                           />
@@ -702,7 +708,6 @@ export default function ReportPage({
                               </label>
                               {getColUniqueVals(col.id)
                                 .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
-<<<<<<< HEAD
                                 .map(val => {
                                   const isChecked = !colFilters[col.id] || colFilters[col.id].has(val);
                                   return (
@@ -719,21 +724,6 @@ export default function ReportPage({
                                     </label>
                                   );
                                 })}
-=======
-                                .map(val => (
-                                <label
-                                  key={val}
-                                  className={`rp-filter-item ${colFilters[col.id]?.has(val) ? "rp-filter-item--checked" : ""}`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={!colFilters[col.id] || colFilters[col.id].has(val)}
-                                    onChange={() => toggleFilterVal(col.id, val)}
-                                  />
-                                  <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
-                                </label>
-                              ))}
->>>>>>> origin/main
                             </div>
                           </div>
                         )}
