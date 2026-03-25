@@ -119,6 +119,7 @@ export default function ReportPage({
 
   const fileRef         = useRef(null);
   const filterRefs      = useRef({});
+  const shiftRef        = useRef(null);
   const tarihLTChecked  = useRef(false);
 
   // ── Dinamik ekstra kolonlar (colMap'teki _extra_ alanlarından) ──────────────
@@ -205,10 +206,14 @@ export default function ReportPage({
         const picker = document.getElementById("rp-col-picker");
         if (picker && !picker.contains(e.target)) setShowColPicker(false);
       }
+      if (shiftOpen) {
+        const shift = shiftRef.current;
+        if (shift && !shift.contains(e.target)) setShiftOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [openFilter, showColPicker]);
+  }, [openFilter, showColPicker, shiftOpen]);
 
   // Sayfa kaydırıldığında filtre popup'ı kapat (position:fixed popup kayar)
   useEffect(() => {
@@ -548,25 +553,21 @@ export default function ReportPage({
                 onChange={e => setSelectedDate(e.target.value)}
                 className="shift-date"
               />
-              <div style={{ position: "relative" }}>
+              <div ref={shiftRef} style={{ position: "relative" }}>
                 <button
                   className={`btn btn-sm ${selectedShift ? "btn-info" : "btn-ghost"}`}
                   onClick={() => setShiftOpen(p => !p)}>
                   {selectedShift || "Vardiya"}
                 </button>
                 {shiftOpen && (
-                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0,
-                    background: "var(--bg2)", border: "1px solid var(--brd)", borderRadius: 8,
-                    zIndex: 99, minWidth: 120 }}>
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 120, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
                     {[null, ...FIXED_SHIFTS.map(s => s.label)].map(v => (
-                      <div key={v ?? "__all"}
+                      <button key={v ?? "__all"} type="button"
+                        className={`rp-shift-option ${v === selectedShift ? "rp-shift-option--active" : ""}`}
                         onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
-                        style={{ padding: "10px 14px", cursor: "pointer",
-                          fontWeight: v === selectedShift ? 700 : 400,
-                          color: v === selectedShift ? "var(--inf)" : "var(--tx1)",
-                          fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                      >
                         {v ?? "Tümü"}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -588,20 +589,27 @@ export default function ReportPage({
                 </button>
                 {showColPicker && (
                   <div className="rp-col-picker-menu">
-                    {allCols.map(c => (
-                      <label key={c.id} className="rp-col-picker-item">
-                        <input
-                          type="checkbox"
-                          checked={!!visibleCols[c.id]}
-                          disabled={c.fixed}
-                          onChange={() => {
-                            if (c.fixed) return;
-                            setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
-                          }}
-                        />
-                        {c.label}
-                      </label>
-                    ))}
+                    {allCols.map(c => {
+                      const isChecked = !!visibleCols[c.id];
+                      const isDisabled = !!c.fixed;
+                      return (
+                        <label
+                          key={c.id}
+                          className={`rp-col-picker-item ${isChecked && !isDisabled ? "rp-col-picker-item--checked" : ""} ${isDisabled ? "rp-col-picker-item--disabled" : ""}`.trim()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isDisabled}
+                            onChange={() => {
+                              if (isDisabled) return;
+                              setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
+                            }}
+                          />
+                          {c.label}
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -667,10 +675,16 @@ export default function ReportPage({
                           >
                             {/* Sıralama butonları */}
                             <div className="rp-filter-sort">
-                              <button onClick={() => { setSortCol(col.id); setSortDir("asc");  setOpenFilter(null); }}>
+                              <button
+                                className={sortCol === col.id && sortDir === "asc" ? "is-active" : ""}
+                                onClick={() => { setSortCol(col.id); setSortDir("asc");  setOpenFilter(null); }}
+                              >
                                 ↑ A → Z Sırala
                               </button>
-                              <button onClick={() => { setSortCol(col.id); setSortDir("desc"); setOpenFilter(null); }}>
+                              <button
+                                className={sortCol === col.id && sortDir === "desc" ? "is-active" : ""}
+                                onClick={() => { setSortCol(col.id); setSortDir("desc"); setOpenFilter(null); }}
+                              >
                                 ↓ Z → A Sırala
                               </button>
                             </div>
@@ -684,7 +698,7 @@ export default function ReportPage({
                             />
                             <div className="rp-filter-list">
                               {/* Tümünü Seç */}
-                              <label className="rp-filter-item rp-filter-item--all">
+                              <label className={`rp-filter-item rp-filter-item--all ${!colFilters[col.id] ? "rp-filter-item--neutral-active" : ""}`}>
                                 <input
                                   type="checkbox"
                                   checked={!colFilters[col.id]}
@@ -694,16 +708,22 @@ export default function ReportPage({
                               </label>
                               {getColUniqueVals(col.id)
                                 .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
-                                .map(val => (
-                                <label key={val} className="rp-filter-item">
-                                  <input
-                                    type="checkbox"
-                                    checked={!colFilters[col.id] || colFilters[col.id].has(val)}
-                                    onChange={() => toggleFilterVal(col.id, val)}
-                                  />
-                                  <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
-                                </label>
-                              ))}
+                                .map(val => {
+                                  const isChecked = !colFilters[col.id] || colFilters[col.id].has(val);
+                                  return (
+                                    <label
+                                      key={val}
+                                      className={`rp-filter-item ${isChecked && colFilters[col.id] ? "rp-filter-item--checked" : ""}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => toggleFilterVal(col.id, val)}
+                                      />
+                                      <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
+                                    </label>
+                                  );
+                                })}
                             </div>
                           </div>
                         )}
