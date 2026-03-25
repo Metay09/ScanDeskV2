@@ -702,6 +702,7 @@ export default function ReportPage({
                               </label>
                               {getColUniqueVals(col.id)
                                 .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
+<<<<<<< HEAD
                                 .map(val => {
                                   const isChecked = !colFilters[col.id] || colFilters[col.id].has(val);
                                   return (
@@ -718,6 +719,21 @@ export default function ReportPage({
                                     </label>
                                   );
                                 })}
+=======
+                                .map(val => (
+                                <label
+                                  key={val}
+                                  className={`rp-filter-item ${colFilters[col.id]?.has(val) ? "rp-filter-item--checked" : ""}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!colFilters[col.id] || colFilters[col.id].has(val)}
+                                    onChange={() => toggleFilterVal(col.id, val)}
+                                  />
+                                  <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
+                                </label>
+                              ))}
+>>>>>>> origin/main
                             </div>
                           </div>
                         )}
