@@ -555,18 +555,14 @@ export default function ReportPage({
                   {selectedShift || "Vardiya"}
                 </button>
                 {shiftOpen && (
-                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0,
-                    background: "var(--bg2)", border: "1px solid var(--brd)", borderRadius: 8,
-                    zIndex: 99, minWidth: 120 }}>
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 120, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
                     {[null, ...FIXED_SHIFTS.map(s => s.label)].map(v => (
-                      <div key={v ?? "__all"}
+                      <button key={v ?? "__all"} type="button"
+                        className={`rp-shift-option ${v === selectedShift ? "rp-shift-option--active" : ""}`}
                         onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
-                        style={{ padding: "10px 14px", cursor: "pointer",
-                          fontWeight: v === selectedShift ? 700 : 400,
-                          color: v === selectedShift ? "var(--inf)" : "var(--tx1)",
-                          fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
+                      >
                         {v ?? "Tümü"}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -667,10 +663,16 @@ export default function ReportPage({
                           >
                             {/* Sıralama butonları */}
                             <div className="rp-filter-sort">
-                              <button onClick={() => { setSortCol(col.id); setSortDir("asc");  setOpenFilter(null); }}>
+                              <button
+                                className={sortCol === col.id && sortDir === "asc" ? "is-active" : ""}
+                                onClick={() => { setSortCol(col.id); setSortDir("asc");  setOpenFilter(null); }}
+                              >
                                 ↑ A → Z Sırala
                               </button>
-                              <button onClick={() => { setSortCol(col.id); setSortDir("desc"); setOpenFilter(null); }}>
+                              <button
+                                className={sortCol === col.id && sortDir === "desc" ? "is-active" : ""}
+                                onClick={() => { setSortCol(col.id); setSortDir("desc"); setOpenFilter(null); }}
+                              >
                                 ↓ Z → A Sırala
                               </button>
                             </div>
