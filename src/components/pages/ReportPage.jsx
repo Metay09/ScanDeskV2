@@ -584,20 +584,26 @@ export default function ReportPage({
                 </button>
                 {showColPicker && (
                   <div className="rp-col-picker-menu">
-                    {allCols.map(c => (
-                      <label key={c.id} className="rp-col-picker-item">
-                        <input
-                          type="checkbox"
-                          checked={!!visibleCols[c.id]}
-                          disabled={c.fixed}
-                          onChange={() => {
-                            if (c.fixed) return;
-                            setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
-                          }}
-                        />
-                        {c.label}
-                      </label>
-                    ))}
+                    {allCols.map(c => {
+                      const isChecked = !!visibleCols[c.id];
+                      return (
+                        <label
+                          key={c.id}
+                          className={`rp-col-picker-item ${isChecked ? "rp-col-picker-item--checked" : ""} ${c.fixed ? "rp-col-picker-item--disabled" : ""}`.trim()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={c.fixed}
+                            onChange={() => {
+                              if (c.fixed) return;
+                              setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
+                            }}
+                          />
+                          {c.label}
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -696,6 +702,24 @@ export default function ReportPage({
                               </label>
                               {getColUniqueVals(col.id)
                                 .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
+<<<<<<< HEAD
+                                .map(val => {
+                                  const isChecked = !colFilters[col.id] || colFilters[col.id].has(val);
+                                  return (
+                                    <label
+                                      key={val}
+                                      className={`rp-filter-item ${isChecked && colFilters[col.id] ? "rp-filter-item--checked" : ""}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => toggleFilterVal(col.id, val)}
+                                      />
+                                      <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
+                                    </label>
+                                  );
+                                })}
+=======
                                 .map(val => (
                                 <label
                                   key={val}
@@ -709,6 +733,7 @@ export default function ReportPage({
                                   <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
                                 </label>
                               ))}
+>>>>>>> origin/main
                             </div>
                           </div>
                         )}
