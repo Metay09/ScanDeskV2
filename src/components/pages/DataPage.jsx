@@ -320,9 +320,9 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
     );
   };
 
-  const CardRow = ({ r, showCust }) => {
+  const CardRow = ({ r }) => {
     const time = new Date(r.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-    const meta = [showCust && r.customer, r.scanned_by, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
+    const meta = [r.customer, r.scanned_by, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
     return (
       <div
         style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0",
@@ -370,10 +370,10 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
     );
   };
 
-  const CardList = ({ rows, showCust }) => (
+  const CardList = ({ rows }) => (
     <div style={{ border: "1.5px solid var(--brd)", borderRadius: "var(--r)",
                   padding: "0 12px", background: "var(--s1)" }}>
-      {rows.map(r => <CardRow key={r.id} r={r} showCust={showCust} />)}
+      {rows.map(r => <CardRow key={r.id} r={r} />)}
     </div>
   );
 
@@ -519,7 +519,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
                 <Ic d={I.user} s={13} />{k}<span className="group-count">{rows.length}</span>
               </div>
               {isMobile
-                ? <CardList rows={rows} showCust={false} />
+                ? <CardList rows={rows} />
                 : <div className="tbl-wrap" style={{ marginBottom: 6 }}>
                     <table className="tbl"><THead showCust={false} rows={rows} /><tbody><Rows rows={rows} showCust={false} /></tbody></table>
                   </div>
@@ -528,7 +528,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
           );
         })
         : isMobile
-          ? <CardList rows={filtered} showCust={true} />
+          ? <CardList rows={filtered} />
           : <div className="tbl-wrap">
               <table className="tbl"><THead showCust={true} /><tbody><Rows rows={filtered} showCust={true} /></tbody></table>
             </div>
