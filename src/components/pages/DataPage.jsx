@@ -17,9 +17,17 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const [selectedDate, setSelectedDate]   = useState(() => fmtDate());
   const [shiftOpen, setShiftOpen]         = useState(false);
   const [userOpen, setUserOpen]           = useState(false);
+  const [selMode, setSelMode] = useState(false);
   const importRef = useRef(null);
+  const longPressRef = useRef(null);
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   const toggleSel = (id) => setSel(p => toggleSetMember(p, id));
   const clearSel = () => setSel(new Set());
+  const exitSelMode = () => { setSelMode(false); clearSel(); };
+  const startLongPress = (id) => {
+    longPressRef.current = setTimeout(() => { setSelMode(true); setSel(new Set([id])); }, 500);
+  };
+  const cancelLongPress = () => clearTimeout(longPressRef.current);
 
   const currentShiftDate = getShiftDate(undefined, currentShift);
 
@@ -311,6 +319,64 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
     );
   };
 
+  const CardRow = ({ r }) => {
+    const time = new Date(r.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+    const meta = [r.customer, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
+    return (
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0",
+                 borderBottom: "1px solid var(--brd)", cursor: selMode ? "pointer" : "default" }}
+        onTouchStart={() => !selMode && startLongPress(r.id)}
+        onTouchEnd={cancelLongPress}
+        onTouchMove={cancelLongPress}
+        onClick={() => selMode && toggleSel(r.id)}
+      >
+        {selMode && (
+          <input type="checkbox" checked={sel.has(r.id)}
+            onChange={e => { e.stopPropagation(); toggleSel(r.id); }}
+            style={{ flexShrink: 0, width: 18, height: 18 }} />
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <SyncDot status={r.syncStatus} error={r.syncError} />
+            <span className="bc" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {r.barcode}
+            </span>
+            <span style={{ fontSize: 10, color: "var(--tx2)", fontFamily: "var(--mono)",
+                           whiteSpace: "nowrap", flexShrink: 0 }}>
+              {time}
+            </span>
+          </div>
+          {meta && (
+            <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 3, overflow: "hidden",
+                          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {meta}
+            </div>
+          )}
+        </div>
+        {!selMode && (
+          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+            <button className="btn btn-info btn-sm" style={{ height: 32, padding: "0 8px" }}
+              onClick={e => { e.stopPropagation(); setEditRec(r); }}>
+              <Ic d={I.edit} s={12} />
+            </button>
+            <button className="btn btn-danger btn-sm" style={{ height: 32, padding: "0 8px" }}
+              onClick={e => { e.stopPropagation(); onDelete(r.id); }}>
+              <Ic d={I.del} s={12} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const CardList = ({ rows }) => (
+    <div style={{ border: "1.5px solid var(--brd)", borderRadius: "var(--r)",
+                  padding: "0 12px", background: "var(--s1)" }}>
+      {rows.map(r => <CardRow key={r.id} r={r} />)}
+    </div>
+  );
+
   return (
     <div className="page">
 
@@ -333,16 +399,23 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
           )}
         </div>
       )}
-      {sel.size > 0 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => {
-            if (!window.confirm(`Seçili ${sel.size} kayıt silinecek. Onaylıyor musunuz?`)) return;
-            onDelete(Array.from(sel));
-            clearSel();
-          }}><Ic d={I.trash} s={15} /> Seçilenleri Sil ({sel.size})</button>
-          {settings.allowExport && (
-            <button className="btn btn-ok" style={{ flex: 1 }} onClick={() => { onExport("xlsx", Array.from(sel)); clearSel(); }}><Ic d={I.xlsx} s={15} /> Seçileni Excel</button>
+      {(selMode || sel.size > 0) && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "var(--tx2)", flex: 1 }}>
+            {sel.size > 0 ? `${sel.size} seçildi` : "Seç"}
+          </span>
+          {sel.size > 0 && (
+            <button className="btn btn-danger btn-sm" onClick={() => {
+              if (!window.confirm(`Seçili ${sel.size} kayıt silinecek. Onaylıyor musunuz?`)) return;
+              onDelete(Array.from(sel)); exitSelMode();
+            }}><Ic d={I.trash} s={13} /> Sil ({sel.size})</button>
           )}
+          {sel.size > 0 && settings.allowExport && (
+            <button className="btn btn-ok btn-sm" onClick={() => { onExport("xlsx", Array.from(sel)); exitSelMode(); }}>
+              <Ic d={I.xlsx} s={13} /> Excel
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={exitSelMode}>İptal</button>
         </div>
       )}
 
@@ -425,14 +498,19 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
         ? Object.entries(groups).map(([k, rows]) => (
           <div key={k}>
             <div className="group-hd"><Ic d={I.user} s={13} />{k}<span className="group-count">{rows.length}</span></div>
-            <div className="tbl-wrap" style={{ marginBottom: 6 }}>
-              <table className="tbl"><THead showCust={false} rows={rows} /><tbody><Rows rows={rows} showCust={false} /></tbody></table>
-            </div>
+            {isMobile
+              ? <CardList rows={rows} />
+              : <div className="tbl-wrap" style={{ marginBottom: 6 }}>
+                  <table className="tbl"><THead showCust={false} rows={rows} /><tbody><Rows rows={rows} showCust={false} /></tbody></table>
+                </div>
+            }
           </div>
         ))
-        : <div className="tbl-wrap">
-          <table className="tbl"><THead showCust={true} /><tbody><Rows rows={filtered} showCust={true} /></tbody></table>
-        </div>
+        : isMobile
+          ? <CardList rows={filtered} />
+          : <div className="tbl-wrap">
+              <table className="tbl"><THead showCust={true} /><tbody><Rows rows={filtered} showCust={true} /></tbody></table>
+            </div>
       }
 
       {editRec && <EditRecordModal record={editRec} fields={fields} customers={customers} aciklamalar={aciklamalar} canManageCustomers={true}
