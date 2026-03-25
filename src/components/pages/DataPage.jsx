@@ -465,14 +465,10 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
               {shiftOpen && (
                 <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--s1)", border: "1.5px solid var(--brd)", borderRadius: "var(--r)", minWidth: 120, boxShadow: "0 4px 16px rgba(0,0,0,.15)" }}>
                   {[null, ...FIXED_SHIFTS.map(s => s.label)].map(v => (
-                    <button
-                      key={v ?? "__all"}
-                      type="button"
-                      onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
-                      style={{ padding: "10px 14px", cursor: "pointer", fontWeight: v === selectedShift ? 700 : 400, color: v === selectedShift ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)", width: "100%", textAlign: "left", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", touchAction: "manipulation", userSelect: "none", WebkitTapHighlightColor: "transparent" }}
-                    >
+                    <div key={v ?? "__all"} onClick={() => { setSelectedShift(v); setShiftOpen(false); }}
+                      style={{ padding: "10px 14px", cursor: "pointer", fontWeight: v === selectedShift ? 700 : 400, color: v === selectedShift ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
                       {v ?? "Tümü"}
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -494,14 +490,10 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
                     const uname = v?.username ?? null;
                     const label = v ? (v.name || v.username) : "Tümü";
                     return (
-                      <button
-                        key={uname ?? "__all"}
-                        type="button"
-                        onClick={() => { setSelectedUser(uname); setUserOpen(false); }}
-                        style={{ padding: "10px 14px", cursor: "pointer", fontWeight: uname === selectedUser ? 700 : 400, color: uname === selectedUser ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)", width: "100%", textAlign: "left", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", touchAction: "manipulation", userSelect: "none", WebkitTapHighlightColor: "transparent" }}
-                      >
+                      <div key={uname ?? "__all"} onClick={() => { setSelectedUser(uname); setUserOpen(false); }}
+                        style={{ padding: "10px 14px", cursor: "pointer", fontWeight: uname === selectedUser ? 700 : 400, color: uname === selectedUser ? "var(--inf)" : "var(--tx1)", fontSize: 13, borderBottom: "1px solid var(--brd)" }}>
                         {label}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
