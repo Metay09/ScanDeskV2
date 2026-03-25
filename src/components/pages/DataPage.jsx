@@ -26,11 +26,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const exitSelMode = () => { setSelMode(false); clearSel(); };
   const startLongPress = (ids) => {
     const idSet = Array.isArray(ids) ? new Set(ids) : new Set([ids]);
-    longPressRef.current = setTimeout(() => {
-      setSelMode(true);
-      setSel(idSet);
-      if (user?.userSettings?.vibration !== false && navigator.vibrate) navigator.vibrate([30, 20, 30]);
-    }, 500);
+    longPressRef.current = setTimeout(() => { setSelMode(true); setSel(idSet); }, 500);
   };
   const cancelLongPress = () => clearTimeout(longPressRef.current);
 
@@ -326,7 +322,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
 
   const CardRow = ({ r }) => {
     const time = new Date(r.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-    const infoMeta = [r.customer, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
+    const meta = [r.customer, r.scanned_by, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
     return (
       <div
         style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0",
@@ -351,17 +347,10 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
               {time}
             </span>
           </div>
-          {(infoMeta || r.scanned_by) && (
-            <div style={{ fontSize: 11, marginTop: 3, display: "flex", gap: 6, overflow: "hidden" }}>
-              {infoMeta && (
-                <span style={{ color: "var(--tx2)", overflow: "hidden", textOverflow: "ellipsis",
-                               whiteSpace: "nowrap", flex: 1 }}>
-                  {infoMeta}
-                </span>
-              )}
-              {r.scanned_by && (
-                <span className="sig-cell" style={{ flexShrink: 0 }}>{r.scanned_by}</span>
-              )}
+          {meta && (
+            <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 3, overflow: "hidden",
+                          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {meta}
             </div>
           )}
         </div>
