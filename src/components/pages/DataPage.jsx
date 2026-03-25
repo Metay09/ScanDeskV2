@@ -24,8 +24,9 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
   const toggleSel = (id) => setSel(p => toggleSetMember(p, id));
   const clearSel = () => setSel(new Set());
   const exitSelMode = () => { setSelMode(false); clearSel(); };
-  const startLongPress = (id) => {
-    longPressRef.current = setTimeout(() => { setSelMode(true); setSel(new Set([id])); }, 500);
+  const startLongPress = (ids) => {
+    const idSet = Array.isArray(ids) ? new Set(ids) : new Set([ids]);
+    longPressRef.current = setTimeout(() => { setSelMode(true); setSel(idSet); }, 500);
   };
   const cancelLongPress = () => clearTimeout(longPressRef.current);
 
@@ -321,7 +322,7 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
 
   const CardRow = ({ r }) => {
     const time = new Date(r.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-    const meta = [r.customer, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
+    const meta = [r.customer, r.scanned_by, r.aciklama, ...dynamicF.map(f => getDynamicFieldValue(r, f.id))].filter(Boolean).join(" · ");
     return (
       <div
         style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0",
@@ -332,9 +333,8 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
         onClick={() => selMode && toggleSel(r.id)}
       >
         {selMode && (
-          <input type="checkbox" checked={sel.has(r.id)}
-            onChange={e => { e.stopPropagation(); toggleSel(r.id); }}
-            style={{ flexShrink: 0, width: 18, height: 18 }} />
+          <input type="checkbox" readOnly checked={sel.has(r.id)}
+            style={{ flexShrink: 0, width: 18, height: 18, pointerEvents: "none" }} />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -495,17 +495,38 @@ export default function DataPage({ fields, records, onDelete, onEdit, onExport, 
       {filtered.length === 0
         ? <div className="empty-state"><Ic d={I.data} s={36} /><p style={{ marginTop: 10, fontSize: 14 }}>Kayıt yok</p></div>
         : grouped
-        ? Object.entries(groups).map(([k, rows]) => (
-          <div key={k}>
-            <div className="group-hd"><Ic d={I.user} s={13} />{k}<span className="group-count">{rows.length}</span></div>
-            {isMobile
-              ? <CardList rows={rows} />
-              : <div className="tbl-wrap" style={{ marginBottom: 6 }}>
-                  <table className="tbl"><THead showCust={false} rows={rows} /><tbody><Rows rows={rows} showCust={false} /></tbody></table>
-                </div>
-            }
-          </div>
-        ))
+        ? Object.entries(groups).map(([k, rows]) => {
+          const groupIds = rows.map(r => r.id);
+          const allSel = groupIds.every(id => sel.has(id));
+          const toggleGroup = () => setSel(p => {
+            const n = new Set(p);
+            if (allSel) groupIds.forEach(id => n.delete(id)); else groupIds.forEach(id => n.add(id));
+            return n;
+          });
+          return (
+            <div key={k}>
+              <div className="group-hd"
+                onTouchStart={() => !selMode && startLongPress(groupIds)}
+                onTouchEnd={cancelLongPress}
+                onTouchMove={cancelLongPress}
+                onClick={() => selMode && toggleGroup()}
+                style={{ cursor: selMode ? "pointer" : "default" }}
+              >
+                {selMode && (
+                  <input type="checkbox" readOnly checked={allSel}
+                    style={{ flexShrink: 0, width: 16, height: 16, pointerEvents: "none" }} />
+                )}
+                <Ic d={I.user} s={13} />{k}<span className="group-count">{rows.length}</span>
+              </div>
+              {isMobile
+                ? <CardList rows={rows} />
+                : <div className="tbl-wrap" style={{ marginBottom: 6 }}>
+                    <table className="tbl"><THead showCust={false} rows={rows} /><tbody><Rows rows={rows} showCust={false} /></tbody></table>
+                  </div>
+              }
+            </div>
+          );
+        })
         : isMobile
           ? <CardList rows={filtered} />
           : <div className="tbl-wrap">
