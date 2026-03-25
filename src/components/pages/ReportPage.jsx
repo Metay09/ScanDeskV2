@@ -686,7 +686,7 @@ export default function ReportPage({
                             />
                             <div className="rp-filter-list">
                               {/* Tümünü Seç */}
-                              <label className="rp-filter-item rp-filter-item--all">
+                              <label className={`rp-filter-item rp-filter-item--all ${!colFilters[col.id] ? "rp-filter-item--neutral-active" : ""}`}>
                                 <input
                                   type="checkbox"
                                   checked={!colFilters[col.id]}
@@ -697,7 +697,10 @@ export default function ReportPage({
                               {getColUniqueVals(col.id)
                                 .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
                                 .map(val => (
-                                <label key={val} className="rp-filter-item">
+                                <label
+                                  key={val}
+                                  className={`rp-filter-item ${colFilters[col.id]?.has(val) ? "rp-filter-item--checked" : ""}`}
+                                >
                                   <input
                                     type="checkbox"
                                     checked={!colFilters[col.id] || colFilters[col.id].has(val)}
