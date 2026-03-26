@@ -707,7 +707,13 @@ export default function ReportPage({
                                 <input
                                   type="checkbox"
                                   checked={!colFilters[col.id]}
-                                  onChange={() => clearColFilter(col.id)}
+                                  onChange={() => {
+                                    if (!colFilters[col.id]) {
+                                      setColFilters(prev => ({ ...prev, [col.id]: new Set() }));
+                                    } else {
+                                      clearColFilter(col.id);
+                                    }
+                                  }}
                                 />
                                 <span>(Tümünü Seç)</span>
                               </label>
