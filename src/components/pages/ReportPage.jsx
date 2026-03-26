@@ -601,15 +601,18 @@ export default function ReportPage({
                         <label
                           key={c.id}
                           className={`rp-col-picker-item ${isChecked && !isDisabled ? "rp-col-picker-item--checked" : ""} ${isDisabled ? "rp-col-picker-item--disabled" : ""}`.trim()}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (!isDisabled) setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
+                          }}
                         >
                           <input
                             type="checkbox"
                             checked={isChecked}
                             disabled={isDisabled}
-                            onChange={() => {
-                              if (isDisabled) return;
-                              setVisibleCols(p => ({ ...p, [c.id]: !p[c.id] }));
-                            }}
+                            readOnly
+                            tabIndex={-1}
+                            style={{ pointerEvents: 'none' }}
                           />
                           {c.label}
                         </label>
@@ -703,17 +706,23 @@ export default function ReportPage({
                             />
                             <div className="rp-filter-list">
                               {/* Tümünü Seç */}
-                              <label className={`rp-filter-item rp-filter-item--all ${!colFilters[col.id] ? "rp-filter-item--neutral-active" : ""}`}>
+                              <label
+                                className={`rp-filter-item rp-filter-item--all ${!colFilters[col.id] ? "rp-filter-item--neutral-active" : ""}`}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  if (!colFilters[col.id]) {
+                                    setColFilters(prev => ({ ...prev, [col.id]: new Set() }));
+                                  } else {
+                                    clearColFilter(col.id);
+                                  }
+                                }}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={!colFilters[col.id]}
-                                  onChange={() => {
-                                    if (!colFilters[col.id]) {
-                                      setColFilters(prev => ({ ...prev, [col.id]: new Set() }));
-                                    } else {
-                                      clearColFilter(col.id);
-                                    }
-                                  }}
+                                  readOnly
+                                  tabIndex={-1}
+                                  style={{ pointerEvents: 'none' }}
                                 />
                                 <span>(Tümünü Seç)</span>
                               </label>
@@ -724,12 +733,15 @@ export default function ReportPage({
                                   return (
                                     <label
                                       key={val}
-                                      className={`rp-filter-item ${isChecked && colFilters[col.id] ? "rp-filter-item--checked" : ""}`}
+                                      className={`rp-filter-item ${isChecked ? "rp-filter-item--checked" : ""}`}
+                                      onClick={(e) => { e.preventDefault(); toggleFilterVal(col.id, val); }}
                                     >
                                       <input
                                         type="checkbox"
                                         checked={isChecked}
-                                        onChange={() => toggleFilterVal(col.id, val)}
+                                        readOnly
+                                        tabIndex={-1}
+                                        style={{ pointerEvents: 'none' }}
                                       />
                                       <span>{val === "" ? <em style={{ color: "var(--tx2)" }}>(boş)</em> : val}</span>
                                     </label>
