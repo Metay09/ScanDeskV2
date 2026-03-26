@@ -232,6 +232,16 @@ export default function ReportPage({
   // Filtre popup açılınca arama kutusunu sıfırla
   useEffect(() => { setFilterSearch(""); }, [openFilter]);
 
+  // Arama kutusuna yazılınca o sütun için otomatik filtre uygula
+  useEffect(() => {
+    if (!openFilter || !filterSearch) return;
+    const allVals = [...new Set(tableRows.map(r => String(r[openFilter] ?? "")))].sort();
+    const matching = allVals.filter(v => v.toLowerCase().includes(filterSearch.toLowerCase()));
+    if (matching.length >= allVals.length) clearColFilter(openFilter);
+    else setColFilters(prev => ({ ...prev, [openFilter]: new Set(matching) }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSearch]);
+
   // ── Referans tabloyla birleştir ─────────────────────────────────────────────
   const tableRows = useMemo(() => {
     return baseRecords.map(record => {
@@ -358,10 +368,19 @@ export default function ReportPage({
   }, [colMapDraft, extraSelected, pendingRows, onRefTableSave]);
 
   // ── Filtre yardımcıları ─────────────────────────────────────────────────────
+  // Diğer sütun filtreleri uygulanmış satırlardan bu sütunun benzersiz değerlerini döner (kaskad filtre)
   const getColUniqueVals = useCallback((colId) => {
-    const vals = new Set(tableRows.map(r => String(r[colId] ?? "")));
+    const source = tableRows.filter(row =>
+      Object.entries(colFilters).every(([cid, vals]) => {
+        if (cid === colId) return true;
+        if (!vals) return true;
+        if (vals.size === 0) return false;
+        return vals.has(String(row[cid] ?? ""));
+      })
+    );
+    const vals = new Set(source.map(r => String(r[colId] ?? "")));
     return [...vals].sort();
-  }, [tableRows]);
+  }, [tableRows, colFilters]);
 
   const toggleFilterVal = (colId, val) => {
     setColFilters(prev => {
