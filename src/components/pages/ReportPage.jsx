@@ -266,7 +266,7 @@ export default function ReportPage({
   const filteredRows = useMemo(() => {
     return tableRows.filter(row =>
       Object.entries(colFilters).every(([colId, vals]) =>
-        !vals?.size || vals.has(String(row[colId] ?? ""))
+        !vals || vals.has(String(row[colId] ?? ""))
       )
     );
   }, [tableRows, colFilters]);
@@ -292,7 +292,7 @@ export default function ReportPage({
 
   const meta     = getReferenceTableMeta();
   const hasTable = refTable && Object.keys(refTable).length > 0;
-  const anyFilter = Object.values(colFilters).some(s => s?.size > 0);
+  const anyFilter = Object.keys(colFilters).length > 0;
 
   // ── Dosya parse ─────────────────────────────────────────────────────────────
   const parseFile = useCallback(async (file) => {
@@ -705,27 +705,49 @@ export default function ReportPage({
                               autoFocus
                             />
                             <div className="rp-filter-list">
-                              {/* Tümünü Seç */}
-                              <label
-                                className={`rp-filter-item rp-filter-item--all ${!colFilters[col.id] ? "rp-filter-item--neutral-active" : ""}`}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  if (!colFilters[col.id]) {
-                                    setColFilters(prev => ({ ...prev, [col.id]: new Set() }));
-                                  } else {
-                                    clearColFilter(col.id);
-                                  }
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!colFilters[col.id]}
-                                  readOnly
-                                  tabIndex={-1}
-                                  style={{ pointerEvents: 'none' }}
-                                />
-                                <span>(Tümünü Seç)</span>
-                              </label>
+                              {/* Tümünü Seç — arama farkındalıklı */}
+                              {(() => {
+                                const _allVals = getColUniqueVals(col.id);
+                                const _visibleVals = filterSearch
+                                  ? _allVals.filter(v => v.toLowerCase().includes(filterSearch.toLowerCase()))
+                                  : _allVals;
+                                const _allVisibleSel = !colFilters[col.id] ||
+                                  _visibleVals.every(v => colFilters[col.id].has(v));
+                                return (
+                                  <label
+                                    className={`rp-filter-item rp-filter-item--all ${_allVisibleSel ? "rp-filter-item--neutral-active" : ""}`}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      if (_allVisibleSel) {
+                                        // Görünenleri kaldır
+                                        const next = !colFilters[col.id]
+                                          ? new Set(_allVals)
+                                          : new Set(colFilters[col.id]);
+                                        _visibleVals.forEach(v => next.delete(v));
+                                        if (next.size >= _allVals.length) clearColFilter(col.id);
+                                        else setColFilters(prev => ({ ...prev, [col.id]: next }));
+                                      } else {
+                                        // Görünenleri ekle
+                                        const next = !colFilters[col.id]
+                                          ? new Set(_allVals)
+                                          : new Set(colFilters[col.id]);
+                                        _visibleVals.forEach(v => next.add(v));
+                                        if (next.size >= _allVals.length) clearColFilter(col.id);
+                                        else setColFilters(prev => ({ ...prev, [col.id]: next }));
+                                      }
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={_allVisibleSel}
+                                      readOnly
+                                      tabIndex={-1}
+                                      style={{ pointerEvents: 'none' }}
+                                    />
+                                    <span>(Tümünü Seç)</span>
+                                  </label>
+                                );
+                              })()}
                               {getColUniqueVals(col.id)
                                 .filter(v => !filterSearch || v.toLowerCase().includes(filterSearch.toLowerCase()))
                                 .map(val => {
