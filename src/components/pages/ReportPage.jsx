@@ -8,7 +8,7 @@ import {
 } from "../../services/referenceTable";
 import { isNative } from "../../services/storage";
 import { getDynamicFieldValue } from "../../services/recordModel";
-import { fmtDate, deriveShiftDate, FIXED_SHIFTS } from "../../utils";
+import { fmtDate, deriveShiftDate, getShiftDate, FIXED_SHIFTS } from "../../utils";
 
 // ── Temel sabit kolonlar ──────────────────────────────────────────────────────
 const BASE_COLS = [
@@ -152,8 +152,13 @@ export default function ReportPage({
         return true;
       });
     }
-    return records.filter(r => r.shift === currentShift);
-  }, [records, isAdmin, currentShift, selectedDate, selectedShift]);
+    const currentShiftDate = getShiftDate(undefined, currentShift);
+    return records.filter(r =>
+      r.scanned_by_username === user?.username &&
+      r.shift === currentShift &&
+      deriveShiftDate(r) === currentShiftDate
+    );
+  }, [records, isAdmin, currentShift, selectedDate, selectedShift, user]);
 
   // Ekstra Excel kolonları değişince visibleCols'a ekle (varsayılan: görünür)
   useEffect(() => {
@@ -702,7 +707,13 @@ export default function ReportPage({
                                 <input
                                   type="checkbox"
                                   checked={!colFilters[col.id]}
-                                  onChange={() => clearColFilter(col.id)}
+                                  onChange={() => {
+                                    if (!colFilters[col.id]) {
+                                      setColFilters(prev => ({ ...prev, [col.id]: new Set() }));
+                                    } else {
+                                      clearColFilter(col.id);
+                                    }
+                                  }}
                                 />
                                 <span>(Tümünü Seç)</span>
                               </label>
