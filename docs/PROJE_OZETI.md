@@ -1,7 +1,6 @@
 # ScanDesk — Proje Özeti
 
-**Tarih:** 2026-03-15
-**Branch:** `claude/review-project-summary-Y06tv`
+**Tarih:** 2026-03-28
 **Durum:** Aktif Geliştirme
 
 ---
@@ -59,7 +58,7 @@ ScanDesk, sanayi ortamlarında vardiya bazlı barkod tarama ve envanter takibi i
 
 | Özellik | Açıklama |
 |---------|----------|
-| Barkod tarama | ZXing Browser, kamera veya USB/Bluetooth okuyucu |
+| Barkod tarama | Klavye, USB/Bluetooth okuyucu veya Zebra DataWedge girişi |
 | Vardiya yönetimi | 3 sabit vardiya: 12-8, 8-4, 4-12 |
 | Çoklu kullanıcı | Admin / normal kullanıcı rolleri |
 | Dinamik alanlar | Kullanıcı tanımlı özel alanlar (JSONB) |
@@ -69,7 +68,7 @@ ScanDesk, sanayi ortamlarında vardiya bazlı barkod tarama ve envanter takibi i
 | Excel/CSV import | Barkod listesi toplu yükleme |
 | Cloud sync | PostgreSQL API veya Google Sheets |
 | Offline kuyruğu | Bağlantı kesilince kayıtlar kuyruğa alınır |
-| Rapor ekranı | Vardiya/müşteri/kullanıcı bazlı istatistikler |
+| Rapor ekranı | Palet referans tablosu ve vardiya/müşteri/kullanıcı bazlı raporlama |
 | Android APK | Capacitor 7 ile native paketleme |
 
 ---
@@ -133,25 +132,42 @@ Dinamik alanlar `custom_fields JSONB` kolonunda tutulur.
 - Java 21, Node 20 kullanılır.
 
 ---
+## 8. API Endpoint'leri
+
+| Endpoint | Metod | Açıklama |
+|----------|-------|----------|
+| `/api/taramalar` | GET | Kayıtları listele (shift, shift_date, limit filtresi) |
+| `/api/taramalar` | POST | Yeni kayıt oluştur (upsert by id) |
+| `/api/taramalar/:id` | GET | Tekil kayıt getir |
+| `/api/taramalar/:id` | PATCH | Kayıt güncelle |
+| `/api/taramalar/:id` | DELETE | Kayıt sil |
+| `/api/users` | GET/PUT | Kullanıcı listesi (JSON array) |
+| `/api/app-config` | GET/PUT | Alanlar, müşteriler, açıklamalar, ayarlar (JSON object) |
+| `/api/ref-table` | GET/PUT | Referans tablo ve kolon eşleşmesi |
+| `/api/events` | GET | SSE bağlantısı (gerçek zamanlı senkronizasyon) |
+
+Tüm endpoint'ler `x-api-key` header veya `key=` query parametresi ile doğrulama gerektirir.
+
+---
+
 ## 9. Bilinen Sorunlar ve Açık Konular
 
 | No | Sorun | Durum |
 |----|-------|-------|
-| 1 | `SelectInput.jsx` hiçbir yerde kullanılmıyor | Açık — kaldırılabilir veya entegre edilebilir |
-| 2 | Google Sheets `no-cors` modu: sunucu hatası tespit edilemiyor | Tasarım kısıtı — dokümante edilmiş |
-| 3 | `App.jsx` 1000+ satır — state çok büyük, custom hook'lara bölünebilir | Teknik borç |
+| 1 | Google Sheets `no-cors` modu: sunucu hatası tespit edilemiyor | Tasarım kısıtı — dokümante edilmiş |
+| 2 | `App.jsx` 1300+ satır — state çok büyük, custom hook'lara bölünebilir | Teknik borç |
 
 ---
 
-## 10. Teknoloji Stack'i (Özet)
+## 10. Teknoloji Stack'i
 
 | Katman | Teknoloji | Versiyon |
 |--------|-----------|----------|
 | Frontend | React | 18.3.1 |
 | Build | Vite | 6.0.0 |
 | Mobil | Capacitor | 7.0.0 |
-| Barkod | ZXing Browser | 0.1.5 |
-| Excel | SheetJS (xlsx) | 0.18.5 |
+| Excel | SheetJS (xlsx) + xlsx-js-style | 0.18.5 / 1.2.0 |
+| QR | qrcode | 1.5.4 |
 | Backend | Express | 4.21.2 |
 | Veritabanı | PostgreSQL (pg) | 8.13.3 |
 | Konteyner | Docker | — |

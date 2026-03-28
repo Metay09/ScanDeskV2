@@ -27,7 +27,7 @@
 **ScanDesk**, sanayi ortamlarında barkod tabanlı envanter takibi yapmak için geliştirilmiş bir **Progressive Web App (PWA)** ve **Android uygulaması**dır.
 
 ### Temel Özellikler:
-- **Real-time barkod okuma** (Kamera + ZXing kütüphanesi)
+- **Real-time barkod okuma** (Klavye/USB/Bluetooth okuyucu + Zebra DataWedge)
 - **Çoklu kullanıcı desteği** (Admin / Normal kullanıcı rolleri)
 - **Vardiya bazlı çalışma** (08:00-16:00, 16:00-00:00, 00:00-08:00)
 - **Müşteri ve özel alan yönetimi**
@@ -54,10 +54,9 @@ Bir üretim tesisinde vardiya başında kullanıcı giriş yapar, vardiyasını 
   - `@capacitor/filesystem` - Dosya yazma/okuma
   - `@capacitor/share` - Native share dialog
 
-### Barkod Okuma
-- **@zxing/browser 0.1.5** - ZXing kütüphanesinin browser implementasyonu
-  - `BrowserMultiFormatReader` - Multi-format barcode decoder
-  - Desteklenen formatlar: QR Code, Code 128, EAN-13, Data Matrix, vb. (12+ format)
+### Barkod Girişi
+- Klavye/USB/Bluetooth barkod okuyucu veya Zebra DataWedge üzerinden **klavye girişi** olarak alınır
+- Kamera tabanlı okuma kaldırılmıştır; endüstriyel ortamda donanımsal okuyucu tercih edilir
 
 ### Veri İşleme
 - **XLSX 0.18.5** - Excel dosyası okuma/yazma (SheetJS)
@@ -106,8 +105,7 @@ scandesk-project/
 │   │   │   ├── Modal.jsx          # Reusable modal wrapper
 │   │   │   ├── Toggle.jsx         # Toggle switch
 │   │   │   ├── ErrorBoundary.jsx  # React error boundary
-│   │   │   ├── PasswordInput.jsx  # Şifre input (göster/gizle)
-│   │   │   └── SelectInput.jsx    # Select dropdown (şu an kullanılmıyor)
+│   │   │   └── PasswordInput.jsx  # Şifre input (göster/gizle)
 │   │   │
 │   │   └── shared/                # Birden fazla sayfada kullanılan widget'lar
 │   │       ├── CustomerPicker.jsx # Müşteri seçimi widget
@@ -223,102 +221,57 @@ const normalizeRecords = (list) => {
 
 ## 5. Barkod Tarama Sistemi
 
-### 5.1 ZXing Kütüphanesi Entegrasyonu
-
 **Dosya:** `src/components/pages/ScanPage.jsx`
 
+Barkod girişi **klavye/USB/Bluetooth okuyucu veya Zebra DataWedge** üzerinden yapılır. Kamera tabanlı barkod okuma (ZXing) projeden kaldırılmıştır; endüstriyel ortamda donanımsal okuyucu tercih edilir.
+
+### 5.1 Giriş Mekanizması
+
+ScanPage'de büyük bir `<input>` alanı (`barcode-input`) sürekli odaklanmış tutulur. Barkod okuyucu, okunan kodu klavye girişi gibi bu alana yazar ve `Enter` tuşu ile gönderir.
+
 ```javascript
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType, NotFoundException } from "@zxing/library";
+// Input alanı otomatik odaklanma (her işlemden sonra)
+const scheduleFocus = useCallback(() => {
+  clearTimeout(focusTimer.current);
+  focusTimer.current = setTimeout(() => {
+    if (inputRef.current && document.activeElement !== inputRef.current) {
+      inputRef.current.focus({ preventScroll: true });
+    }
+  }, 120);
+}, []);
 
-// Desteklenen 12+ barkod formatı
-const SCAN_FORMATS = [
-  BarcodeFormat.QR_CODE,
-  BarcodeFormat.CODE_128,
-  BarcodeFormat.EAN_13,
-  BarcodeFormat.DATA_MATRIX,
-  // ... vb.
-];
-```
-
-### 5.2 Kamera Başlatma Akışı
-
-**Adım 1: Kullanıcı "Kamerayı Aç" butonuna tıklar**
-```javascript
-const startCamera = async () => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    toast("Bu tarayıcı kamera erişimini desteklemiyor.", "var(--err)");
-    return;
-  }
-  setCamActive(true);  // Modal'ı aç
+// Enter tuşu ile barkod kabul
+const handleKey = e => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const bc = barcode.trim();
+  // autoSave kapalıysa → DetailFormModal açılır
+  // autoSave açıksa  → doğrudan kayıt oluşturulur
 };
 ```
 
-**Adım 2: useEffect kamera stream'ini başlatır**
-```javascript
-useEffect(() => {
-  if (!camActive) return;
+**İki Mod:**
+- **Auto-save modu** (`autoSave: true`): Barkod okutulduğunda doğrudan kayıt oluşturulur (`AUTO_SAVE_DEBOUNCE_MS: 550ms`)
+- **Manuel mod** (`autoSave: false`): Barkod okutulduğunda `DetailFormModal` açılır, ek alanlar doldurulur, sonra kaydedilir
 
-  const initCamera = async () => {
-    setCamStatus("requesting-camera");
-    await startDecoding();  // ZXing decoder'ı başlat
-    // ZXing stream'i otomatik alıp videoRef.current.srcObject'e atar
-  };
-
-  initCamera();
-}, [camActive]);
-```
-
-**Adım 3: ZXing sürekli decode yapar**
-```javascript
-const startDecoding = async () => {
-  const hints = new Map();
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, SCAN_FORMATS);
-  hints.set(DecodeHintType.TRY_HARDER, true);
-
-  const reader = new BrowserMultiFormatReader(hints);
-
-  await reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
-    if (err) return;  // NotFoundException durumlarını ignore et
-
-    const code = result.getText();
-    if (!code) return;
-
-    // Debounce check (800ms default)
-    if (scanLockRef.current && (Date.now() - lastScanRef.current.ts) < 800) return;
-
-    scanLockRef.current = true;
-    lastScanRef.current = { value: code, ts: Date.now() };
-
-    // Kullanıcıya feedback
-    setScanPulse(true);  // Animasyon
-    setTimeout(() => setScanPulse(false), 220);
-
-    // Kodu işle
-    onBarcodeRef.current?.(code);
-  });
-};
-```
-
-### 5.3 Barkod Validasyon ve Duplicate Check
+### 5.2 Barkod Validasyon ve Duplicate Check
 
 ```javascript
-const canAcceptCode = (bc) => {
+const validateBarcodeForSave = (bc) => {
   if (!bc) return { ok: false, msg: null };
 
-  // 1. Uzunluk validasyonu (optional setting)
+  // 1. Vardiya sona ermiş mi?
+  if (shiftExpired && !isAdmin) {
+    return { ok: false, msg: "Vardiya sona erdi — okutma devre dışı" };
+  }
+
+  // 2. Uzunluk validasyonu (optional setting)
   if (scanSettings.enforceBarcodeLengthMatch) {
     if (expectedBarcodeLength.current === null) {
-      expectedBarcodeLength.current = bc.length;  // İlk barkod referans
+      expectedBarcodeLength.current = bc.length;  // İlk barkod referans uzunluk olur
     } else if (bc.length !== expectedBarcodeLength.current) {
       return { ok: false, msg: `Barkod uzunluğu ${expectedBarcodeLength.current} olmalı` };
     }
-  }
-
-  // 2. Debounce check (aynı barkodu 800ms içinde tekrar okumayı engelle)
-  const last = recentRef.current.get(bc);
-  if (last && (Date.now() - last) < 800) {
-    return { ok: false, msg: "Çift okuma engellendi" };
   }
 
   // 3. Duplicate check (aynı vardiya+tarih+barkod kontrolü)
@@ -333,26 +286,24 @@ const canAcceptCode = (bc) => {
 **Neden duplicate vardiya+tarih bazlı?**
 Farklı vardiyalarda aynı barkod olabilir (sabah vardiyasında tarandı, akşam vardiyasında da taranabilir). Bu nedenle uniqueness kontrolü `(barcode + shift + shiftDate)` üçlüsüne göre yapılır.
 
-### 5.4 Flash (Torch) Desteği
+### 5.3 Görsel Geri Bildirim
 
-```javascript
-const toggleTorch = async () => {
-  const track = trackRef.current;  // Video track reference
-  if (!track) return;
+Tarama durumu `flash` state'i ile görselleştirilir:
+- `"ready"` — Gri/varsayılan: barkod bekleniyor
+- `"saved"` — Yeşil: kayıt başarıyla oluşturuldu
+- `"scanning"` — Mavi: işlem devam ediyor
 
-  const caps = track.getCapabilities?.();
-  if (!caps.torch) {
-    toast('Flash desteklenmiyor', 'var(--mut)');
-    return;
-  }
+Her başarılı taramada:
+- Titreşim (`vibration` ayarı açıksa, Capacitor Haptics)
+- Bip sesi (`beep` ayarı açıksa, `playBeep()` — 1900Hz, 90ms)
+- Flash animasyonu (`FLASH_RESET_DELAY_MS: 700ms`)
 
-  const next = !torchOn;
-  await track.applyConstraints({ advanced: [{ torch: next }] });
-  setTorchOn(next);
-};
-```
+### 5.4 Sticky Seçimler
 
-**Not:** Torch desteği tarayıcı ve cihaz donanımına bağlıdır. Desktop'larda genelde çalışmaz, mobil cihazların arka kamerasında mevcuttur.
+Müşteri, açıklama ve ek alan değerleri `localStorage`'da kalıcı olarak tutulur. Sayfa yenilendiğinde veya uygulama kapanıp açıldığında önceki seçimler korunur:
+- `scandesk_default_customer` — Son seçilen müşteri
+- `scandesk_default_aciklama` — Son seçilen açıklama
+- `scandesk_sticky_fields` — Dinamik alan değerleri (JSON)
 
 ---
 
@@ -1073,7 +1024,7 @@ const canAcceptCode = (bc) => {
 ```javascript
 const scanLockRef = useRef(false);
 
-// ZXing callback içinde
+// Barkod işleme callback'i içinde
 if (scanLockRef.current) return;  // Locked, ignore
 scanLockRef.current = true;
 
@@ -1082,68 +1033,58 @@ setTimeout(() => {
 }, 800);
 ```
 
-### 13.2 Stale Closure Problemi (ZXing Callback)
+### 13.2 Stale Closure Problemi (Async Callback)
 
-**Problem:**
+**Problem:** Async callback'ler (setTimeout, event listener'lar vb.) closure'da eski state değerini yakalar.
+
 ```javascript
-const [bulkMode, setBulkMode] = useState(false);
+const [autoSave, setAutoSave] = useState(false);
 
 const onBarcode = (code) => {
-  if (bulkMode) {  // BUG: bulkMode değeri callback closure'ında eskimiş olabilir
-    // Bulk kayıt
+  if (autoSave) {  // BUG: autoSave değeri callback closure'ında eskimiş olabilir
+    // Otomatik kayıt
   } else {
-    // Tekli kayıt
+    // Manuel form aç
   }
 };
-
-// ZXing setup
-reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-  onBarcode(result.getText());  // Stale closure!
-});
 ```
 
 **Çözüm: useRef + callback ref pattern**
 ```javascript
-const bulkModeRef = useRef(false);
+const autoSaveRef = useRef(false);
 const onBarcodeRef = useRef(null);
 
 useEffect(() => {
-  bulkModeRef.current = bulkMode;
-}, [bulkMode]);
+  autoSaveRef.current = autoSave;
+}, [autoSave]);
 
 const onBarcode = (code) => {
-  if (bulkModeRef.current) {  // Her zaman güncel değer
+  if (autoSaveRef.current) {  // Her zaman güncel değer
     // ...
   }
 };
 
 onBarcodeRef.current = onBarcode;  // Her render'da güncelle
-
-// ZXing callback
-reader.decodeFromVideoDevice(..., (result) => {
-  onBarcodeRef.current?.(result.getText());  // Güncel callback'i çağır
-});
 ```
+
+Bu pattern `App.jsx`'te `fieldsRef`, `custListRef`, `aciklamaListRef`, `settingsRef`, `usersRef`, `integrationRef` gibi birçok ref ile kullanılır.
 
 ### 13.3 Auto-Focus Scheduling
 
-**Problem:** Kamera kapatıldığında veya modal açıldığında input focus kayboluyor.
+**Problem:** Modal açıldığında veya müşteri/açıklama seçimi yapıldığında input focus kayboluyor.
 
 **Çözüm:**
 ```javascript
 const scheduleFocus = useCallback(() => {
   clearTimeout(focusTimer.current);
   focusTimer.current = setTimeout(() => {
-    if (!camActiveRef.current && inputRef.current) {
+    if (inputRef.current && document.activeElement !== inputRef.current) {
       inputRef.current.focus({ preventScroll: true });
     }
   }, 120);
 }, []);
 
 // Her önemli action sonrası çağır
-stopCamera();
-scheduleFocus();
-
 handleCustomerSelect(val);
 scheduleFocus();
 ```
@@ -1187,25 +1128,23 @@ const filtered = visibleRecords.filter(r => {
 ### Güçlü Yönler:
 ✅ **Offline-first:** Network olmadan çalışır
 ✅ **Platform agnostic:** Web + Android tek codebase
-✅ **Lightweight:** 3rd party dependency minimal (React + Vite + Capacitor + XLSX + ZXing)
+✅ **Lightweight:** 3rd party dependency minimal (React + Vite + Capacitor + XLSX)
 ✅ **Extensible:** Dinamik alan sistemi, plug-and-play cloud integrations
 ✅ **Security:** PBKDF2 password hashing, client-side encryption ready
 
 ### Trade-offs:
-⚠️ **Global state management:** Redux/Zustand yok, büyük uygulamalarda prop drilling problemi olabilir
-⚠️ **No backend:** Tüm iş mantığı client-side (admin approval bile client'ta), server-side validation yok
-⚠️ **LocalStorage limit:** Web'de 5-10 MB (100.000+ kayıttan sonra problem olabilir)
-⚠️ **No real-time sync:** PostgreSQL API / Sheets insert fire-and-forget, conflict resolution yok
+- **Global state management:** Redux/Zustand yok, büyük uygulamalarda prop drilling problemi olabilir
+- **App.jsx boyutu:** 1300+ satır — state ve iş mantığı büyük, custom hook'lara bölünebilir (teknik borç)
+- **LocalStorage limit:** Web'de 5-10 MB (100.000+ kayıttan sonra problem olabilir)
+- **Conflict resolution:** SSE ile real-time sync mevcut ancak çakışma çözümü (merge strategy) yok
 
 ### Gelecek İyileştirmeler:
-🔮 IndexedDB migration (unlimited storage)
-🔮 WebSocket real-time sync (çoklu kullanıcı çakışma engeli)
-🔮 Backend API (Node.js + PostgreSQL) ile merkezi validasyon
-🔮 PWA service worker (offline caching, background sync)
-🔮 Biometric authentication (fingerprint/face unlock)
+- IndexedDB migration (unlimited storage)
+- Çakışma çözüm stratejisi (last-write-wins veya merge)
+- PWA service worker (offline caching, background sync)
+- App.jsx state yönetimini custom hook'lara bölme
 
 ---
 
-**Hazırlayan:** Claude (Anthropic AI)
-**Tarih:** 2026-03-15
-**Versiyon:** 1.1.0
+**Son güncelleme:** 2026-03-28
+**Versiyon:** 1.2.0
