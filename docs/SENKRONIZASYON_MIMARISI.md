@@ -320,7 +320,7 @@ saveState() çağrılır
 
 Kaydedilen alanlar:
   users, fields, records, lastSaved,
-  custList, settings, integration,
+  custList, aciklamaList, settings, integration,
   shiftTakeovers, activeSession,
   syncQueue,   ← kuyruk da kalıcı!
   theme

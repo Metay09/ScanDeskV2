@@ -1,5 +1,7 @@
 # PostgreSQL Schema Recommendations for ScanDesk
 
+> **Not:** Gerçek çalışan şema `server/init.sql` dosyasında tanımlıdır. Bu doküman genişletilmiş öneriler, indeksler, opsiyonel tablolar ve performans/güvenlik stratejilerini kapsar.
+
 ## Overview
 
 This document provides the recommended PostgreSQL database schema for ScanDesk, designed to support the application's data model with fixed system fields and dynamic custom fields.
@@ -58,6 +60,12 @@ CREATE TABLE taramalar (
 
   -- Dynamic fields stored as JSONB
   custom_fields JSONB DEFAULT '{}'::JSONB,
+
+  -- Vardiya iş tarihi (gece yarısı geçen vardiyalar için timestamp'ten farklı olabilir)
+  shift_date DATE DEFAULT NULL,
+
+  -- Vardiya devir kaydı için kaynak vardiya etiketi (source='shift_takeover' ise dolu)
+  inherited_from_shift TEXT DEFAULT '',
 
   -- Constraints
   CONSTRAINT valid_shift CHECK (shift IN ('12-8', '8-4', '4-12')),
@@ -145,7 +153,9 @@ CREATE TRIGGER update_taramalar_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 ```
 
-### Supporting Tables (Optional but Recommended)
+### Supporting Tables (Optional — Şu An Uygulanmıyor)
+
+> **Not:** Aşağıdaki tablolar gelecek için önerilerdir. Mevcut uygulamada kullanıcılar, müşteriler ve alan tanımları `app_state` tablosundaki JSONB KV store içinde saklanmaktadır (`key='users'`, `key='app_config'`).
 
 #### Users Table
 

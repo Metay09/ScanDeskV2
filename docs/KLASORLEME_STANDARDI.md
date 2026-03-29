@@ -62,8 +62,7 @@ src/
     │   ├── Modal.jsx
     │   ├── Toggle.jsx
     │   ├── ErrorBoundary.jsx
-    │   ├── PasswordInput.jsx
-    │   └── SelectInput.jsx
+    │   └── PasswordInput.jsx
     │
     └── shared/
         ├── CustomerPicker.jsx
@@ -90,7 +89,7 @@ src/
 ## Import Sırası (her dosyada bu sırayı koru)
 
 1. React ve React hook'ları
-2. Üçüncü parti kütüphaneler (`zxing`, `xlsx`, `@capacitor/...` vb.)
+2. Üçüncü parti kütüphaneler (`xlsx`, `@capacitor/...` vb.)
 3. Servisler (`../../services/`)
 4. Hook'lar (`../../hooks/`)
 5. Bileşenler (diğer `../pages/`, `../modals/`, `../ui/`, `../shared/`)
@@ -121,4 +120,3 @@ Komşu klasördeki bileşen için: `../ui/Modal`, `../modals/EditRecordModal`
 - `storage.js` platform detection yapar (web/Android) — mantığını bozma
 - Capacitor plugin import'ları (`@capacitor/...`) native köprüdür; taşıma
 - `syncQueue.js` çevrimdışı kuyruğu yönetir; `integrations.js` ile birlikte çalışır
-- `SelectInput.jsx` şu an hiçbir sayfada kullanılmıyor; kullanmadan önce `ui/` altından import et

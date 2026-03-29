@@ -1,6 +1,6 @@
 # ScanDesk — Teknik Durum Raporu
 
-**Son güncelleme:** 2026-03-15
+**Son güncelleme:** 2026-03-28
 **Proje:** ScanDesk
 **Durum:** Aktif geliştirme
 
@@ -39,10 +39,13 @@ Dinamik kullanıcı alanları `customFields: {}` objesi içinde tutulur.
 
 ### `referenceTable.js`
 Referans tablo servisi. Excel'den yüklenen palet/lot verilerini localStorage'da saklar ve sorgular.
-- `loadReferenceTable()` / `saveReferenceTable()` — kalıcılık
-- `lotToDate(lot)` — lot numarasından üretim tarihi hesapla
-- `queryRefTable(table, barcode)` — barkod ile palet kaydı bul
-- Sunucu senkronizasyonu: `fetchServerRefTable(cfg)` ile merkezi tablo çekilebilir
+- `lotToDate(lot)` — lot numarasından üretim tarihi hesapla (yıl+hafta+gün formatı)
+- `normalizeDate(val)` — tarihi DD.MM.YYYY formatına normalize et
+- `guessColMap(headers)` — Excel sütun başlıklarından otomatik kolon eşleşmesi
+- `buildTableFromRows(rows, colMap)` — satırlardan referans tablo oluştur (deduplikasyon ile)
+- `lookupPalet(table, paletKodu)` — palet koduna göre kayıt ara
+- Sunucu senkronizasyonu: `fetchServerRefTable(cfg)` / `pushServerRefTable(cfg, table, colMap)`
+- Kalıcılık: localStorage anahtarları `scandesk_ref_table`, `scandesk_ref_col_map`, `scandesk_ref_table_meta`
 
 ### `integrations.js`
 Dış sistemlerle iletişim. İki entegrasyon tipi: `postgres_api` ve `gsheets`.
@@ -64,8 +67,9 @@ Dış sistemlerle iletişim. İki entegrasyon tipi: `postgres_api` ve `gsheets`.
 ### `syncQueue.js`
 PostgreSQL sync başarısız olduğunda işlemleri kuyruğa alır. Saf fonksiyonlar, state dışında bağımsız çalışır.
 
-**Queue item:** `{ id, action, recordId, payload, createdAt, retryCount, lastError, status }`
+**Queue item:** `{ id, action, recordId, payload, integrationType, createdAt, retryCount, lastError, status }`
 **action:** `create | update | delete`
+**integrationType:** `postgres_api | gsheets`
 **status:** `pending | processing | failed`
 
 ---
@@ -157,6 +161,8 @@ Tablo adı: `taramalar`. Detaylar için `POSTGRESQL_SCHEMA.md`.
 | source_record_id | TEXT | Kaynak kayıt id (devralma) |
 | updated_at | TIMESTAMPTZ | Son güncelleme |
 | custom_fields | JSONB | Dinamik alanlar |
+| shift_date | DATE | Vardiya iş tarihi |
+| inherited_from_shift | TEXT | Kaynak vardiya etiketi (devir) |
 
 ---
 
@@ -166,7 +172,7 @@ Tablo adı: `taramalar`. Detaylar için `POSTGRESQL_SCHEMA.md`.
 |---|------|---------|
 | 1 | `sheetsDeleteBulk` sıralı çalışıyor; Apps Script toplu silme desteklerse paralel yapılabilir | Düşük |
 | 2 | Tema `localStorage`'a direkt yazılıyor; diğer state Capacitor Preferences üzerinden gidiyor | Düşük |
-| 3 | `App.jsx` 1000+ satır — state çok büyük, custom hook'lara bölünebilir | Teknik borç |
+| 3 | `App.jsx` 1300+ satır — state çok büyük, custom hook'lara bölünebilir | Teknik borç |
 
 ## G. KAPANAN / ÇÖZÜLEN KONULAR
 
