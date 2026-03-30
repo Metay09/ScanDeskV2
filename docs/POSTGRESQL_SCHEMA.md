@@ -2,6 +2,7 @@
 
 > **Not:** Gerçek çalışan şema `server/init.sql` dosyasında tanımlıdır. Bu doküman genişletilmiş öneriler, indeksler, opsiyonel tablolar ve performans/güvenlik stratejilerini kapsar.
 
+
 ## Overview
 
 This document provides the recommended PostgreSQL database schema for ScanDesk, designed to support the application's data model with fixed system fields and dynamic custom fields.
