@@ -1,29 +1,15 @@
-name: Build ScanDeskGenel APK
+name: Build Debug APK
 
 on:
-  push:
-    branches:
-      - scandeskGenel
   pull_request:
-    branches:
-      - scandeskGenel
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: scandeskgenel-apk-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  build-apk:
-    name: Build Debug APK
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -37,30 +23,28 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web application
+      - name: Build web
         run: npm run build
 
-      - name: Sync Capacitor Android project
+      - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Prepare Gradle
-        run: |
-          chmod +x android/gradlew
-          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
       - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: cd android && ./gradlew assembleDebug
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ScanDeskGenel-debug-${{ github.run_number }}
+          name: ScanDesk-debug-${{ github.event.pull_request.number }}
           path: android/app/build/outputs/apk/debug/ScanDesk-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
